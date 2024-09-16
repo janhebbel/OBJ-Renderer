@@ -43,7 +43,6 @@ main :: proc() {
                                     rect.right - rect.left,
                                     rect.bottom - rect.top,
                                     nil, nil, hinstance, nil)
-
     if window == nil {
         panic("Failed to create a window.")
     }
@@ -54,7 +53,7 @@ main :: proc() {
 
     // Create factory.
     factory: ^dxgi.IFactory7
-    hr = dxgi.CreateDXGIFactory2({.DEBUG}, dxgi.IFactory7_UUID, (^rawptr)(&factory))
+    hr = dxgi.CreateDXGIFactory2(dxgi.CREATE_FACTORY{}, dxgi.IFactory7_UUID, (^rawptr)(&factory))
     if hr != win32.S_OK {
         panic("Failed to create a DXGIFactory7.")
     }
@@ -72,14 +71,35 @@ main :: proc() {
     fmt.printfln("Selected adapter %s.", desc.Description[:])
 
     // Create device.
-    feature_levels := [?]d3d.FEATURE_LEVEL{._11_1, ._11_0}
+    feature_levels := [?]d3d.FEATURE_LEVEL{._11_1}
+    device_flags := d3d.CREATE_DEVICE_FLAGS{.SINGLETHREADED}
+    when ODIN_DEBUG {
+        device_flags |= {.DEBUG}
+    }
+
     device: ^d3d.IDevice
     feature_level: d3d.FEATURE_LEVEL
     device_context: ^d3d.IDeviceContext
-    hr = d3d.CreateDevice(adapter, .UNKNOWN, nil, {.SINGLETHREADED, .DEBUG}, &feature_levels[0], 2,
+    hr = d3d.CreateDevice(adapter, .UNKNOWN, nil, device_flags, &feature_levels[0], len(feature_levels),
                           d3d.SDK_VERSION, &device, &feature_level, &device_context)
     if hr != win32.S_OK || feature_level != ._11_1 {
         panic("Failed to create the desired device.")
+    }
+
+    // Create swapchain.
+    swapchain: ^dxgi.ISwapChain1
+    swapchain_desc := dxgi.SWAP_CHAIN_DESC1{}
+    swapchain_desc.Width  = 0
+    swapchain_desc.Height = 0
+    swapchain_desc.Format = .R8G8B8A8_UNORM
+    swapchain_desc.SampleDesc = dxgi.SAMPLE_DESC{1, 0}
+    swapchain_desc.BufferUsage = {.RENDER_TARGET_OUTPUT}
+    swapchain_desc.BufferCount = 2
+    swapchain_desc.SwapEffect = .FLIP_SEQUENTIAL
+    swapchain_fullscreen_desc := dxgi.SWAP_CHAIN_FULLSCREEN_DESC{Windowed = win32.TRUE}
+    hr = factory.CreateSwapChainForHwnd(factory, device, window, &swapchain_desc, &swapchain_fullscreen_desc, nil, &swapchain)
+    if hr != win32.S_OK {
+        panic("Failed to create a swapchain for the specified window.")
     }
 
     //
