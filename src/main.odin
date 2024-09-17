@@ -14,6 +14,7 @@ main :: proc() {
 
     //
     // Register a window class and create a window.
+    //
     hinstance := win32.HINSTANCE(win32.GetModuleHandleW(nil))
 
     window_class := win32.WNDCLASSW{}
@@ -22,7 +23,6 @@ main :: proc() {
     window_class.hInstance = hinstance
     window_class.hCursor = win32.LoadCursorW(nil, ([^]u16)(rawptr(win32.IDC_ARROW))) // win32.MAKEINTRESOURCEW(32512)
     window_class.lpszClassName = win32.L("CustomWindowClass")
-    // TODO: WindowClass.hIcon
 
     if win32.RegisterClassW(&window_class) == 0 {
         panic("Failed to register the window class.")
@@ -49,6 +49,7 @@ main :: proc() {
 
     //
     // Init D3D11
+    //
     hr: win32.HRESULT
 
     // Create factory.
@@ -79,9 +80,9 @@ main :: proc() {
 
     device: ^d3d.IDevice
     feature_level: d3d.FEATURE_LEVEL
-    device_context: ^d3d.IDeviceContext
+    imm_context: ^d3d.IDeviceContext
     hr = d3d.CreateDevice(adapter, .UNKNOWN, nil, device_flags, &feature_levels[0], len(feature_levels),
-                          d3d.SDK_VERSION, &device, &feature_level, &device_context)
+                          d3d.SDK_VERSION, &device, &feature_level, &imm_context)
     if hr != win32.S_OK || feature_level != ._11_1 {
         panic("Failed to create the desired device.")
     }
@@ -102,21 +103,64 @@ main :: proc() {
         panic("Failed to create a swapchain for the specified window.")
     }
 
+    // Validate swapchain width and height.
+    swapchain.GetDesc1(swapchain, &swapchain_desc)
+    assert(swapchain_desc.Width == window_width && swapchain_desc.Height == window_height)
+
+    // Get backbuffer, create a render target view, and set the render target.
+    backbuffer: ^d3d.ITexture2D
+    hr = swapchain.GetBuffer(swapchain, 0, d3d.ITexture2D_UUID, (^rawptr)(&backbuffer))
+    if hr != win32.S_OK {
+        panic("Failed to get the backbuffer texture from the swap chain.")
+    }
+
+    render_target_view: ^d3d.IRenderTargetView
+    hr = device.CreateRenderTargetView(device, backbuffer, nil, &render_target_view)
+    backbuffer.Release(backbuffer)
+    if hr != win32.S_OK {
+        panic("Failed to create a render target view of the backbuffer.")
+    }
+
+    imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, nil)
+
+    // Set up the viewport.
+    viewport := d3d.VIEWPORT{}
+    viewport.TopLeftX = 0.0
+    viewport.TopLeftY = 0.0
+    viewport.Width = f32(swapchain_desc.Width)
+    viewport.Height = f32(swapchain_desc.Height)
+    viewport.MinDepth = 0.0
+    viewport.MaxDepth = 1.0
+    imm_context.RSSetViewports(imm_context, 1, &viewport)
+
+    //
     //
     //
     win32.ShowWindow(window, win32.SW_SHOWNORMAL)
 
     //
     // Game Loop
+    //
     for global_running {
         //
         // Process win32 messages.
+        //
         message := win32.MSG{}
         for win32.PeekMessageW(&message, nil, 0, 0, win32.PM_REMOVE) {
             win32.TranslateMessage(&message)
             win32.DispatchMessageW(&message)
         }
 
+        //
+        // Rendering.
+        //
+        clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
+        imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
+
+        hr = swapchain.Present(swapchain, 0, {})
+        if hr != win32.S_OK {
+            panic("Failed to present an image from the swapchain.")
+        }
     }
 
     win32.ExitProcess(0)
