@@ -97,6 +97,7 @@ main :: proc() {
     swapchain_desc.BufferUsage = {.RENDER_TARGET_OUTPUT}
     swapchain_desc.BufferCount = 2
     swapchain_desc.SwapEffect = .FLIP_SEQUENTIAL
+    swapchain_desc.Flags = {.ALLOW_TEARING}
     swapchain_fullscreen_desc := dxgi.SWAP_CHAIN_FULLSCREEN_DESC{Windowed = win32.TRUE}
     hr = factory.CreateSwapChainForHwnd(factory, device, window, &swapchain_desc, &swapchain_fullscreen_desc, nil, &swapchain)
     if hr != win32.S_OK {
@@ -123,6 +124,8 @@ main :: proc() {
 
     imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, nil)
 
+    // TODO: Create depth and stencil view.
+    
     // Set up the viewport.
     viewport := d3d.VIEWPORT{}
     viewport.TopLeftX = 0.0
@@ -134,14 +137,23 @@ main :: proc() {
     imm_context.RSSetViewports(imm_context, 1, &viewport)
 
     //
+    // Set up
     //
-    //
+    delta_time: f32 = 0.0
+    performance_frequency, counter_now, counter_last: win32.LARGE_INTEGER = {}, {}, {}
+    win32.QueryPerformanceFrequency(&performance_frequency)
+    win32.QueryPerformanceCounter(&counter_last)
     win32.ShowWindow(window, win32.SW_SHOWNORMAL)
 
     //
     // Game Loop
     //
     for global_running {
+        // Calculate frame time and display it in the window title.
+        counter_last = counter_now
+        win32.QueryPerformanceCounter(&counter_now)
+        delta_time = f32(counter_now - counter_last) / f32(performance_frequency)
+        
         //
         // Process win32 messages.
         //
@@ -157,7 +169,11 @@ main :: proc() {
         clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
         imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
 
-        hr = swapchain.Present(swapchain, 0, {})
+        present_flags := dxgi.PRESENT{}
+        when ODIN_DEBUG {
+            present_flags |= {.ALLOW_TEARING}
+        }
+        hr = swapchain.Present(swapchain, 0, present_flags)
         if hr != win32.S_OK {
             panic("Failed to present an image from the swapchain.")
         }
