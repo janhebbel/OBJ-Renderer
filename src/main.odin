@@ -150,32 +150,36 @@ main :: proc() {
     //
     for global_running {
         // Calculate frame time and display it in the window title.
-        counter_last = counter_now
-        win32.QueryPerformanceCounter(&counter_now)
-        delta_time = f32(counter_now - counter_last) / f32(performance_frequency)
+        {
+            counter_last = counter_now
+            win32.QueryPerformanceCounter(&counter_now)
+            delta_time = f32(counter_now - counter_last) / f32(performance_frequency)
+        }
         
         //
         // Process win32 messages.
         //
-        message := win32.MSG{}
-        for win32.PeekMessageW(&message, nil, 0, 0, win32.PM_REMOVE) {
-            win32.TranslateMessage(&message)
-            win32.DispatchMessageW(&message)
+        {
+            message := win32.MSG{}
+            for win32.PeekMessageW(&message, nil, 0, 0, win32.PM_REMOVE) {
+                win32.TranslateMessage(&message)
+                win32.DispatchMessageW(&message)
+            }
         }
 
         //
         // Rendering.
         //
-        clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
-        imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
+        {
+            clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
+            imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
 
-        present_flags := dxgi.PRESENT{}
-        when ODIN_DEBUG {
-            present_flags |= {.ALLOW_TEARING}
-        }
-        hr = swapchain.Present(swapchain, 0, present_flags)
-        if hr != win32.S_OK {
-            panic("Failed to present an image from the swapchain.")
+            present_flags := dxgi.PRESENT{}
+            when ODIN_DEBUG {
+                present_flags |= {.ALLOW_TEARING}
+            }
+            hr = swapchain.Present(swapchain, 0, present_flags)
+            assert(hr == win32.S_OK)
         }
     }
 
