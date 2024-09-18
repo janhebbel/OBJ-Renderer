@@ -108,7 +108,7 @@ main :: proc() {
     swapchain.GetDesc1(swapchain, &swapchain_desc)
     assert(swapchain_desc.Width == window_width && swapchain_desc.Height == window_height)
 
-    // Get backbuffer, create a render target view, and set the render target.
+    // Get backbuffer and create a render target view
     backbuffer: ^d3d.ITexture2D
     hr = swapchain.GetBuffer(swapchain, 0, d3d.ITexture2D_UUID, (^rawptr)(&backbuffer))
     if hr != win32.S_OK {
@@ -122,9 +122,29 @@ main :: proc() {
         panic("Failed to create a render target view of the backbuffer.")
     }
 
-    imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, nil)
+    // Create the depth and stencil buffer and 
+    depth_buffer_desc := d3d.TEXTURE2D_DESC{}
+    depth_buffer_desc.Width = swapchain_desc.Width
+    depth_buffer_desc.Height = swapchain_desc.Height
+    depth_buffer_desc.MipLevels = 1
+    depth_buffer_desc.ArraySize = 1
+    depth_buffer_desc.Format = .D24_UNORM_S8_UINT
+    depth_buffer_desc.SampleDesc = dxgi.SAMPLE_DESC{1, 0}
+    depth_buffer_desc.Usage = .DEFAULT
+    depth_buffer_desc.BindFlags = {.DEPTH_STENCIL}
+    depth_buffer_desc.CPUAccessFlags = {}
+    depth_buffer_desc.MiscFlags = {}
+    depth_stencil_buffer: ^d3d.ITexture2D
+    hr = device.CreateTexture2D(device, &depth_buffer_desc, nil, &depth_stencil_buffer)
+    if hr != win32.S_OK {
+        panic("Failed to create the depth/stencil buffer.")
+    }
 
-    // TODO: Create depth and stencil view.
+    // depth_stencil_view: ^d3d.DepthStencilView
+    // hr = device.CreateDepthStencilView(device, 
+
+    // Bind the backbuffer and depth/stencil buffer
+    imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, nil)
     
     // Set up the viewport.
     viewport := d3d.VIEWPORT{}
@@ -149,16 +169,14 @@ main :: proc() {
     // Game Loop
     //
     for global_running {
-        // Calculate frame time and display it in the window title.
+        // Calculate delta time
         {
             counter_last = counter_now
             win32.QueryPerformanceCounter(&counter_now)
             delta_time = f32(counter_now - counter_last) / f32(performance_frequency)
         }
         
-        //
-        // Process win32 messages.
-        //
+        // Process win32 messages
         {
             message := win32.MSG{}
             for win32.PeekMessageW(&message, nil, 0, 0, win32.PM_REMOVE) {
@@ -167,9 +185,7 @@ main :: proc() {
             }
         }
 
-        //
-        // Rendering.
-        //
+        // Rendering
         {
             clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
             imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
