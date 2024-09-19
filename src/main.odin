@@ -97,7 +97,7 @@ main :: proc() {
     swapchain_desc.BufferUsage = {.RENDER_TARGET_OUTPUT}
     swapchain_desc.BufferCount = 2
     swapchain_desc.SwapEffect = .FLIP_SEQUENTIAL
-    swapchain_desc.Flags = {.ALLOW_TEARING}
+    swapchain_desc.Flags = {.ALLOW_TEARING} // for disabling vsync
     swapchain_fullscreen_desc := dxgi.SWAP_CHAIN_FULLSCREEN_DESC{Windowed = win32.TRUE}
     hr = factory.CreateSwapChainForHwnd(factory, device, window, &swapchain_desc, &swapchain_fullscreen_desc, nil, &swapchain)
     if hr != win32.S_OK {
@@ -140,11 +140,68 @@ main :: proc() {
         panic("Failed to create the depth/stencil buffer.")
     }
 
-    // depth_stencil_view: ^d3d.DepthStencilView
-    // hr = device.CreateDepthStencilView(device, 
+    // create and set the depth stencil state
+    depth_stencil_state_desc := d3d.DEPTH_STENCIL_DESC{}
+    depth_stencil_state_desc.DepthEnable = win32.TRUE
+    depth_stencil_state_desc.DepthWriteMask = .ALL
+    depth_stencil_state_desc.DepthFunc = .LESS
+    
+    depth_stencil_state_desc.StencilEnable = win32.TRUE
+    depth_stencil_state_desc.StencilReadMask = 0xFF
+    depth_stencil_state_desc.StencilWriteMask = 0xFF
+    
+    depth_stencil_state_desc.FrontFace.StencilFailOp = .KEEP
+    depth_stencil_state_desc.FrontFace.StencilDepthFailOp = .INCR
+    depth_stencil_state_desc.FrontFace.StencilPassOp = .KEEP
+    depth_stencil_state_desc.FrontFace.StencilFunc = .ALWAYS
+    
+    depth_stencil_state_desc.BackFace.StencilFailOp = .KEEP
+    depth_stencil_state_desc.BackFace.StencilDepthFailOp = .DECR
+    depth_stencil_state_desc.BackFace.StencilPassOp = .KEEP
+    depth_stencil_state_desc.BackFace.StencilFunc = .ALWAYS
+    depth_stencil_state: ^d3d.IDepthStencilState
+    hr = device.CreateDepthStencilState(device, &depth_stencil_state_desc, &depth_stencil_state)
+    if hr != win32.S_OK {
+        panic("Failed to create a depth stencil state.")
+    }
+    
+    imm_context.OMSetDepthStencilState(imm_context, depth_stencil_state, 1)
+    
+    // create the depth stencil view
+    depth_stencil_view_desc := d3d.DEPTH_STENCIL_VIEW_DESC{}
+    depth_stencil_view_desc.Format = depth_buffer_desc.Format
+    depth_stencil_view_desc.ViewDimension = .TEXTURE2D
+    depth_stencil_view_desc.Flags = {}
+    depth_stencil_view_desc.Texture2D.MipSlice = 0
+    depth_stencil_view: ^d3d.IDepthStencilView
+    hr = device.CreateDepthStencilView(device, depth_stencil_buffer, &depth_stencil_view_desc, &depth_stencil_view)
+    if hr != win32.S_OK {
+        panic("Failed to create a depth stencil view.")
+    }
 
     // Bind the backbuffer and depth/stencil buffer
-    imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, nil)
+    imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, depth_stencil_view)
+
+    // create a rasterizer state for increased customization options
+    rasterizer_desc := d3d.RASTERIZER_DESC{}
+    rasterizer_desc.FillMode = .WIREFRAME // .WIREFRAME or .SOLID
+    rasterizer_desc.CullMode = .FRONT // .NONE or .FRONT or .BACK
+    rasterizer_desc.FrontCounterClockwise = win32.FALSE
+    rasterizer_desc.DepthBias = 0
+    rasterizer_desc.DepthBiasClamp = 0.0
+    rasterizer_desc.SlopeScaledDepthBias = 0.0
+    rasterizer_desc.DepthClipEnable = win32.TRUE
+    rasterizer_desc.ScissorEnable = win32.FALSE
+    rasterizer_desc.MultisampleEnable = win32.FALSE
+    rasterizer_desc.AntialiasedLineEnable = win32.FALSE
+    rasterizer_state: ^d3d.IRasterizerState
+    hr = device.CreateRasterizerState(device, &rasterizer_desc, &rasterizer_state)    
+    if hr != win32.S_OK {
+        panic("Failed to create a depth stencil view.")
+    }
+    
+    // set rasterizer state
+    imm_context.RSSetState(imm_context, rasterizer_state)
     
     // Set up the viewport.
     viewport := d3d.VIEWPORT{}
@@ -192,9 +249,9 @@ main :: proc() {
 
             present_flags := dxgi.PRESENT{}
             when ODIN_DEBUG {
-                present_flags |= {.ALLOW_TEARING}
+                present_flags |= {.ALLOW_TEARING} // for disabling vsync
             }
-            hr = swapchain.Present(swapchain, 0, present_flags)
+            hr = swapchain.Present(swapchain, 0, present_flags) // 0, .ALLOW_TEARING = no vsync
             assert(hr == win32.S_OK)
         }
     }
