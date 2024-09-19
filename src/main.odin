@@ -31,9 +31,9 @@ main :: proc() {
         if win32.RegisterClassW(&window_class) == 0 {
             panic("Failed to register the window class.")
         }
-
-        window_style    := win32.DWORD(win32.WS_OVERLAPPED | win32.WS_CAPTION | win32.WS_SYSMENU | win32.WS_MINIMIZEBOX)
+        
         window_style_ex := win32.DWORD(0)
+        window_style    := win32.DWORD(win32.WS_OVERLAPPED | win32.WS_CAPTION | win32.WS_SYSMENU | win32.WS_MINIMIZEBOX | win32.WS_CLIPCHILDREN | win32.WS_CLIPSIBLINGS)
 
         rect := win32.RECT{}
         rect.left   = 0
@@ -227,6 +227,15 @@ main :: proc() {
     win32.QueryPerformanceFrequency(&performance_frequency)
     win32.QueryPerformanceCounter(&counter_last)
     win32.ShowWindow(window, win32.SW_SHOWNORMAL)
+
+    present_flags := dxgi.PRESENT{}
+    when ODIN_DEBUG {
+        present_flags |= {.ALLOW_TEARING} // for disabling vsync
+    }
+    
+    cube, success := load_model("..\\res\\cube.obj")
+    assert(success, "Failed to load model.")
+    _ = cube
     
     //
     // Main Loop
@@ -254,11 +263,7 @@ main :: proc() {
             imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
             imm_context.ClearDepthStencilView(imm_context, depth_stencil_view, {.DEPTH, .STENCIL}, 1.0, 0)
 
-            present_flags := dxgi.PRESENT{}
-            when ODIN_DEBUG {
-                present_flags |= {.ALLOW_TEARING} // for disabling vsync
-            }
-            hr = swapchain.Present(swapchain, 0, present_flags) // 0, .ALLOW_TEARING = no vsync
+            hr = swapchain.Present(swapchain, 0, present_flags) // 0 & .ALLOW_TEARING = no vsync
             assert(hr == win32.S_OK)
         }
     }
