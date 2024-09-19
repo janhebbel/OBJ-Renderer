@@ -25,7 +25,7 @@ main :: proc() {
         window_class.style = win32.CS_HREDRAW | win32.CS_VREDRAW | win32.CS_OWNDC
         window_class.lpfnWndProc = main_window_proc
         window_class.hInstance = hinstance
-        window_class.hCursor = win32.LoadCursorW(nil, ([^]u16)(rawptr(win32.IDC_ARROW))) // win32.MAKEINTRESOURCEW(32512)
+        window_class.hCursor = win32.LoadCursorW(nil, ([^]u16)(rawptr(win32.IDC_ARROW)))
         window_class.lpszClassName = win32.L("CustomWindowClass")
 
         if win32.RegisterClassW(&window_class) == 0 {
@@ -43,10 +43,10 @@ main :: proc() {
         win32.AdjustWindowRectEx(&rect, window_style, false, window_style_ex)
 
         window = win32.CreateWindowExW(window_style_ex, window_class.lpszClassName, win32.L("Flight Sim"),
-                                        window_style, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT,
-                                        rect.right - rect.left,
-                                        rect.bottom - rect.top,
-                                        nil, nil, hinstance, nil)
+                                       window_style, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT,
+                                       rect.right - rect.left,
+                                       rect.bottom - rect.top,
+                                       nil, nil, hinstance, nil)
         if window == nil {
             panic("Failed to create a window.")
         }
