@@ -56,6 +56,7 @@ main :: proc() {
     imm_context: ^d3d.IDeviceContext
     swapchain: ^dxgi.ISwapChain1
     render_target_view: ^d3d.IRenderTargetView
+    depth_stencil_view: ^d3d.IDepthStencilView
 
     //
     // Init D3D11
@@ -178,7 +179,6 @@ main :: proc() {
         depth_stencil_view_desc.ViewDimension = .TEXTURE2D
         depth_stencil_view_desc.Flags = {}
         depth_stencil_view_desc.Texture2D.MipSlice = 0
-        depth_stencil_view: ^d3d.IDepthStencilView
         hr = device.CreateDepthStencilView(device, depth_stencil_buffer, &depth_stencil_view_desc, &depth_stencil_view)
         if hr != win32.S_OK {
             panic("Failed to create a depth stencil view.")
@@ -218,7 +218,7 @@ main :: proc() {
         viewport.MaxDepth = 1.0
         imm_context.RSSetViewports(imm_context, 1, &viewport)
     }
-
+    
     //
     // Main loop set up
     //
@@ -227,7 +227,7 @@ main :: proc() {
     win32.QueryPerformanceFrequency(&performance_frequency)
     win32.QueryPerformanceCounter(&counter_last)
     win32.ShowWindow(window, win32.SW_SHOWNORMAL)
-
+    
     //
     // Main Loop
     //
@@ -252,6 +252,7 @@ main :: proc() {
         {
             clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
             imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
+            imm_context.ClearDepthStencilView(imm_context, depth_stencil_view, {.DEPTH, .STENCIL}, 1.0, 0)
 
             present_flags := dxgi.PRESENT{}
             when ODIN_DEBUG {
