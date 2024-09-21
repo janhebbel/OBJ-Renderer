@@ -1,8 +1,7 @@
 package flightsim
 
+import "core:fmt"
 import "core:os"
-import "core:strings"
-import "core:strconv"
 
 Vertex :: struct {
     position: [4]f32,
@@ -17,40 +16,31 @@ Model :: struct {
     index_count: i32,
 }
 
-Lexer :: struct {
+Tokenizer :: struct {
     data: []u8,
-    index: i32,
+    char: u8,
+    offset: i32,
     end_of_file: bool,
 }
 
-Lexer_State :: enum {
-    BEGIN,
-    WHITESPACE,
-    COMMENT,
-    WORD,
-    END,
-}
-
-Token_Type :: enum {
-    NONE,
-    FLOAT,
-    INTEGER,
-    IDENTIFIER,
-    SLASH,
-    KEYWORD_O,
-    KEYWORD_V,
-    KEYWORD_VT,
-    KEYWORD_VN,
-    KEYWORD_F,
+Token_Kind :: enum {
+    Float,
+    Integer,
+    Identifier,
+    Slash,
+    Keywords_Begin,
+        V,
+        VT,
+        VN,
+        F,
+        O,
+    Keywords_End,
+    Count,
 }
 
 Token :: struct {
-    type : Token_Type,
-    value : struct #raw_union {
-        s: string,
-        f: f64,
-        i: int,
-    },
+    kind : Token_Kind,
+    value : []u8,
 }
 
 is_end_of_line :: proc(char: u8) -> bool {
@@ -65,47 +55,69 @@ is_whitespace :: proc(char: u8) -> bool {
     return is_end_of_line(char) || is_spacing(char)
 }
 
-is_alphabetic :: proc(char: u8) -> bool {
+is_letter :: proc(char: u8) -> bool {
     return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
 }
 
-is_numeric :: proc(char: u8) -> bool {
+is_digit :: proc(char: u8) -> bool {
     return char >= '0' && char <= '9'
 }
 
 is_alphanumeric :: proc(char: u8) -> bool {
-    return is_alphabetic(char) || is_numeric(char)
+    return is_letter(char) || is_digit(char)
 }
 
-lexer_advance :: proc(lexer: ^Lexer, offset: i32 = 1) {
-    lexer.index += offset
-}
-
-lexer_peek :: proc(lexer: ^Lexer) -> u8 {
-    lexer.end_of_file = int(lexer.index) == len(lexer.data) - 1
-    return lexer.data[lexer.index]
-}
-
-lexer_consume :: proc(lexer: ^Lexer) -> u8 {
-    c := lexer_peek(lexer)
-    lexer_advance(lexer)
-    return c
-}
-
-lexer_get_word :: proc(lexer: ^Lexer) -> string {
-    start, end : i32 = lexer.index, 0
-    for !is_whitespace(lexer_peek(lexer)) {
-        lexer_advance(lexer)
+advance_char :: proc(t: ^Tokenizer) {
+    t.offset += 1
+    
+    if int(t.offset) >= len(t.data) {
+        t.end_of_file = true
+        return
     }
-    end = lexer.index
-    //lexer_advance(lexer, end - start)
-    return transmute(string)(lexer.data[start:end])
+    
+    t.char = t.data[t.offset]
 }
 
-lexer_skip :: proc(lexer: ^Lexer, func: proc(char: u8) -> bool, mod: bool) {
-    for mod == func(lexer_peek(lexer)) {
-        lexer_advance(lexer)
+undo_char :: proc(t: ^Tokenizer) {
+    t.offset -= 1
+    
+    if int(t.offset) < 0 {
+        assert(false, "This shouldn't happen.")
+        t.offset = 0
     }
+    
+    t.char = t.data[t.offset]
+}
+
+scan_identifier :: proc(t: ^Tokenizer) -> []u8 {
+    offset := t.offset
+    
+    for !t.end_of_file && (is_letter(t.char) || is_digit(t.char)) {
+        advance_char(t)
+    }
+    
+    return t.data[offset:t.offset]
+}
+
+scan_number :: proc(t: ^Tokenizer) -> (kind: Token_Kind, s: []u8) {
+    offset := t.offset
+    
+    decimal_points := 0
+    for i := 0; !t.end_of_file && (is_digit(t.char) || t.char == '.' || t.char == '+' || t.char == '-'); i += 1 {
+        decimal_points += t.char == '.'
+        
+        if (decimal_points > 1) || (i > 0 && (t.char == '+' || t.char == '-')){
+            undo_char(t)
+            break
+        }
+        
+        advance_char(t)
+    }
+    
+    assert(decimal_points == 0 || decimal_points == 1)
+    kind = decimal_points == 1 ? .Float : .Integer
+    
+    return kind, t.data[offset:t.offset]
 }
 
 is_obj_identifier :: proc(str: string) -> bool {
@@ -114,7 +126,7 @@ is_obj_identifier :: proc(str: string) -> bool {
     }
     
     is_identifier: bool
-    is_identifier = is_alphabetic(str[0])
+    is_identifier = is_letter(str[0])
     for i := 1; i < len(str); i += 1 {
         is_identifier &= is_alphanumeric(str[i])
     }
@@ -129,7 +141,7 @@ is_obj_float :: proc(str: string) -> bool {
     is_float: bool
     point_count := 0
     
-    is_float = '+' == str[0] || '-' == str[0] || is_numeric(str[0])
+    is_float = '+' == str[0] || '-' == str[0] || is_digit(str[0])
     if '.' == str[0] {
         point_count += 1
         is_float = true
@@ -140,7 +152,7 @@ is_obj_float :: proc(str: string) -> bool {
             point_count += 1
             is_float &= (point_count == 1)
         } else {
-            is_float &= is_numeric(str[i])
+            is_float &= is_digit(str[i])
         }
     }
     
@@ -153,16 +165,26 @@ is_obj_integer :: proc(str: string) -> bool {
     }
     
     is_int: bool
-    if '+' == str[0] || '-' == str[0] || is_numeric(str[0]) {
+    if '+' == str[0] || '-' == str[0] || is_digit(str[0]) {
         is_int = true
     }
     
     for i := 1; i < len(str); i += 1 {
-        is_int &= is_numeric(str[i])
+        is_int &= is_digit(str[i])
     }
     
     return is_int
 }
+
+keywords := [?]string{
+    "v",
+    "vt",
+    "vn",
+    "f",
+    "o",
+}
+#assert(len(keywords) == cast(int)(Token_Kind.Keywords_End - Token_Kind.Keywords_Begin) - 1, 
+    "The keywords slice does not contain all keywords")
 
 obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     // 
@@ -172,168 +194,51 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     defer delete(tokens)
     reserve(&tokens, size_of(Token) * 1024)
     
-    lexer := Lexer{data, 0, false}
-    state : Lexer_State = .BEGIN
-    for !lexer.end_of_file {
-        switch state {
-        case .BEGIN: 
-            if is_whitespace(lexer_peek(&lexer)) {
-                state = .WHITESPACE
-            } else if is_alphanumeric(lexer_peek(&lexer)) {
-                state = .WORD
-            } else if '#' == lexer_peek(&lexer) {
-                state = .COMMENT
-            } else {
-                assert(false, "Unrecognized character.")
-                return model, false
+    t := Tokenizer{data, data[0], 0, false}
+    
+    for !t.end_of_file {
+        token := Token{}
+        switch c := t.char; true {
+        case is_letter(c):
+            s := scan_identifier(&t)
+            
+            token.kind = .Identifier
+            token.value = s
+            
+            check_for_keyword: for i := 0; i < len(keywords); i += 1 {
+                if keywords[i] == string(s) {
+                    token.kind = .Keywords_Begin + cast(Token_Kind)(1 + i)
+                    assert(token.kind < .Keywords_End)
+                    break check_for_keyword
+                }
             }
             
-        case .WHITESPACE:
-            lexer_skip(&lexer, is_whitespace, true)
-            state = .BEGIN
+            append(&tokens, token)
             
-        case .COMMENT:
-            lexer_skip(&lexer, is_end_of_line, false)
-            lexer_skip(&lexer, is_end_of_line, true)
-            state = .BEGIN
+        case is_digit(c), c == '.', c == '+', c == '-':
+            kind, s := scan_number(&t)
+            token.kind = kind
+            token.value = s
             
-        case .WORD:
-            word := lexer_get_word(&lexer)
-            type : Token_Type
-            if 0 == strings.compare("o", word) {
-                type = .KEYWORD_O
-            } else if 0 == strings.compare("v", word) {
-                type = .KEYWORD_V
-            } else if 0 == strings.compare("vt", word) {
-                type = .KEYWORD_VT
-            } else if 0 == strings.compare("vn", word) {
-                type = .KEYWORD_VN
-            } else if 0 == strings.compare("f", word) {
-                type = .KEYWORD_F
-            }
-            append(&tokens, Token{type, {}})
+            append(&tokens, token)
             
-            token: Token
-            #partial switch type {
-            case .KEYWORD_O: 
-                lexer_skip(&lexer, is_spacing, true)
-                word = lexer_get_word(&lexer)
-                
-                if !is_obj_identifier(word) {
-                    assert(false, "Expected an identifier.")
-                    return model, false
-                }
-                
-                token.type = .IDENTIFIER
-                token.value.s = word
-                append(&tokens, token)
-                
-            case .KEYWORD_V:
-                for i := 0; i < 4; i += 1 {
-                    lexer_skip(&lexer, is_spacing, true)
-                    word = lexer_get_word(&lexer)
-                    
-                    if !is_obj_float(word) {
-                        if i >= 3 { break }
-                        
-                        assert(false, "Expected a float.")
-                        return model, false
-                    }
-                    
-                    token.type = .FLOAT
-                    token.value.f = strconv.atof(word)
-                    append(&tokens, token)
-                }
-                
-            case .KEYWORD_VT:
-                for i := 0; i < 3; i += 1 {
-                    lexer_skip(&lexer, is_spacing, true)
-                    word = lexer_get_word(&lexer)
-                    
-                    if !is_obj_float(word) {
-                        if i >= 1 { break }
-                        
-                        assert(false, "Expected a float.")
-                        return model, false
-                    }
-                    
-                    token.type = .FLOAT
-                    token.value.f = strconv.atof(word)
-                    append(&tokens, token)
-                }
-                
-            case .KEYWORD_VN:
-                for i := 0; i < 3; i += 1 {
-                    lexer_skip(&lexer, is_spacing, true)
-                    word = lexer_get_word(&lexer)
-                    
-                    if !is_obj_float(word) {
-                        assert(false, "Expected a float.")
-                        return model, false
-                    }
-                    
-                    token.type = .FLOAT
-                    token.value.f = strconv.atof(word)
-                    append(&tokens, token)
-                }
-                
-            case .KEYWORD_F:
-                for i := 0; i < 3; i += 1 {
-                    lexer_skip(&lexer, is_spacing, true)
-                    word = lexer_get_word(&lexer)
-                    
-                    words, err := strings.split(word, "/", context.temp_allocator)
-                    if err != nil {
-                        assert(false, "Out of memory.")
-                        return model, false
-                    }
-                    
-                    if len(words) <= 0 {
-                        assert(false, "No indices in face descriptor element. Format is v/vt/vn.")
-                        return model, false
-                    } else if len(words) > 3 {
-                        assert(false, "Too many indices in face descriptor element. Format is v/vt/vn.")
-                        return model, false
-                    }
-                    
-                    for w in words {
-                        if !is_obj_integer(w) {
-                            assert(false, "Error while parsing f statement: Expected integer. Format is v/vt/vn.")
-                            return model, false
-                        }
-                        
-                        token.type = .INTEGER
-                        token.value.i = strconv.atoi(w)
-                        append(&tokens, token)
-                    }
-                }
-                
-                lexer_skip(&lexer, is_spacing, true)
-                if !is_end_of_line(lexer_peek(&lexer)) {
-                    assert(false, "Expected end of line. Only triangles supported for now.")
-                    return model, false
-                }
-                
-            case:
-                assert(false, "Expected a keyword token type.")
-                return model, false
-            }
+        case c == '/':
+            token.kind = .Slash
+            token.value = t.data[t.offset:t.offset+1]
             
-            state = .END
+            append(&tokens, token)
             
-        case .END:
-            lexer_skip(&lexer, is_spacing, true)
-            if !is_end_of_line(lexer_consume(&lexer)) {
-                assert(false, "Expected end of line character.")
-                return model, false
-            }
-            lexer_skip(&lexer, is_end_of_line, true)
+            advance_char(&t)
             
-            state = .BEGIN
+        case is_whitespace(c):
+            advance_char(&t)
+            
+        case:
+            fmt.println("Unrecognized symbol.")
+            return model, false
         }
-        
-        free_all(context.temp_allocator) 
     }
+    
     return model, true
 }
 
