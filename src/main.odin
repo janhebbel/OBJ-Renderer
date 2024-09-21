@@ -273,16 +273,11 @@ main :: proc() {
 
 main_window_proc :: proc "stdcall" (hwnd: win32.HWND, msg: u32, wparam: win32.WPARAM, lparam: win32.LPARAM) -> int {
     switch msg {
-    case win32.WM_DESTROY: fallthrough
-    case win32.WM_CLOSE: fallthrough
-    case win32.WM_QUIT:
+    case win32.WM_DESTROY, win32.WM_CLOSE, win32.WM_QUIT:
         global_running = false
         return 0
         
-    case win32.WM_KEYDOWN: fallthrough
-    case win32.WM_SYSKEYDOWN: fallthrough
-    case win32.WM_KEYUP: fallthrough
-    case win32.WM_SYSKEYUP:
+    case win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYUP: 
         key := win32.LOWORD(wparam)
         
         was_down := (lparam & (1 << 30)) != 0

@@ -58,7 +58,7 @@ is_end_of_line :: proc(char: u8) -> bool {
 }
 
 is_spacing :: proc(char: u8) -> bool {
-    return char == ' ' || char == '\t' || char == '\v' || char == 'f'
+    return char == ' ' || char == '\t' || char == '\v' || char == '\f'
 }
 
 is_whitespace :: proc(char: u8) -> bool {
@@ -82,7 +82,7 @@ lexer_advance :: proc(lexer: ^Lexer, offset: i32 = 1) {
 }
 
 lexer_peek :: proc(lexer: ^Lexer) -> u8 {
-    lexer.end_of_file = int(lexer.index - 1) == len(lexer.data)
+    lexer.end_of_file = int(lexer.index) == len(lexer.data) - 1
     return lexer.data[lexer.index]
 }
 
@@ -109,6 +109,10 @@ lexer_skip :: proc(lexer: ^Lexer, func: proc(char: u8) -> bool, mod: bool) {
 }
 
 is_obj_identifier :: proc(str: string) -> bool {
+    if len(str) == 0 {
+        return false
+    }
+    
     is_identifier: bool
     is_identifier = is_alphabetic(str[0])
     for i := 1; i < len(str); i += 1 {
@@ -143,6 +147,23 @@ is_obj_float :: proc(str: string) -> bool {
     return is_float
 }
 
+is_obj_integer :: proc(str: string) -> bool {
+    if len(str) == 0 {
+        return false
+    }
+    
+    is_int: bool
+    if '+' == str[0] || '-' == str[0] || is_numeric(str[0]) {
+        is_int = true
+    }
+    
+    for i := 1; i < len(str); i += 1 {
+        is_int &= is_numeric(str[i])
+    }
+    
+    return is_int
+}
+
 obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     // 
     // LEXING
@@ -153,7 +174,7 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     
     lexer := Lexer{data, 0, false}
     state : Lexer_State = .BEGIN
-    for {
+    for !lexer.end_of_file {
         switch state {
         case .BEGIN: 
             if is_whitespace(lexer_peek(&lexer)) {
@@ -213,7 +234,7 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
                     word = lexer_get_word(&lexer)
                     
                     if !is_obj_float(word) {
-                        if i == 3 { break }
+                        if i >= 3 { break }
                         
                         assert(false, "Expected a float.")
                         return model, false
@@ -222,6 +243,75 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
                     token.type = .FLOAT
                     token.value.f = strconv.atof(word)
                     append(&tokens, token)
+                }
+                
+            case .KEYWORD_VT:
+                for i := 0; i < 3; i += 1 {
+                    lexer_skip(&lexer, is_spacing, true)
+                    word = lexer_get_word(&lexer)
+                    
+                    if !is_obj_float(word) {
+                        if i >= 1 { break }
+                        
+                        assert(false, "Expected a float.")
+                        return model, false
+                    }
+                    
+                    token.type = .FLOAT
+                    token.value.f = strconv.atof(word)
+                    append(&tokens, token)
+                }
+                
+            case .KEYWORD_VN:
+                for i := 0; i < 3; i += 1 {
+                    lexer_skip(&lexer, is_spacing, true)
+                    word = lexer_get_word(&lexer)
+                    
+                    if !is_obj_float(word) {
+                        assert(false, "Expected a float.")
+                        return model, false
+                    }
+                    
+                    token.type = .FLOAT
+                    token.value.f = strconv.atof(word)
+                    append(&tokens, token)
+                }
+                
+            case .KEYWORD_F:
+                for i := 0; i < 3; i += 1 {
+                    lexer_skip(&lexer, is_spacing, true)
+                    word = lexer_get_word(&lexer)
+                    
+                    words, err := strings.split(word, "/", context.temp_allocator)
+                    if err != nil {
+                        assert(false, "Out of memory.")
+                        return model, false
+                    }
+                    
+                    if len(words) <= 0 {
+                        assert(false, "No indices in face descriptor element. Format is v/vt/vn.")
+                        return model, false
+                    } else if len(words) > 3 {
+                        assert(false, "Too many indices in face descriptor element. Format is v/vt/vn.")
+                        return model, false
+                    }
+                    
+                    for w in words {
+                        if !is_obj_integer(w) {
+                            assert(false, "Error while parsing f statement: Expected integer. Format is v/vt/vn.")
+                            return model, false
+                        }
+                        
+                        token.type = .INTEGER
+                        token.value.i = strconv.atoi(w)
+                        append(&tokens, token)
+                    }
+                }
+                
+                lexer_skip(&lexer, is_spacing, true)
+                if !is_end_of_line(lexer_peek(&lexer)) {
+                    assert(false, "Expected end of line. Only triangles supported for now.")
+                    return model, false
                 }
                 
             case:
@@ -241,6 +331,8 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
             
             state = .BEGIN
         }
+        
+        free_all(context.temp_allocator) 
     }
     return model, true
 }
