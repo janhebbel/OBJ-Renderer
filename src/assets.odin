@@ -35,6 +35,7 @@ Token_Kind :: enum {
         F,
         O,
     Keywords_End,
+    End,
     Count,
 }
 
@@ -196,15 +197,44 @@ keywords := [?]string{
 #assert(len(keywords) == cast(int)(Token_Kind.Keywords_End - Token_Kind.Keywords_Begin) - 1, 
     "The keywords slice does not contain all keywords")
 
+Parser :: struct {
+    tokens: []Token,
+    tok: Token,
+    index: i32,
+}
+
+advance_token :: proc(p: ^Parser) {
+    p.index += 1
+    if int(p.index) < len(p.tokens) {
+        p.tok = p.tokens[p.index]
+    }
+}
+
+expect :: proc(p: ^Parser, kind: Token_Kind, min: int, max: int) -> bool {
+    for i in 0..<max {
+        if p.tok.kind == kind {
+            advance_token(p)
+        } else {
+            if i < min {
+                fmt.println("Error while parsing: Expected token of kind %d.", kind)
+                assert(false)
+                return false
+            }
+        }
+    }
+    return true
+}
+    
 obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     // 
-    // LEXING
+    // TOKENIZATION
     // 
-    tokens : [dynamic]Token
-    defer delete(tokens)
-    reserve(&tokens, size_of(Token) * 1024)
-    
     t := Tokenizer{data, data[0], 0, false}
+    
+    tokens := make([dynamic]Token, 0, 4096)
+    defer delete(tokens)
+    
+    attrib_counts := [len(keywords)]int{}
     
     line_count := 0
     
@@ -219,6 +249,7 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
             
             check_for_keyword: for i := 0; i < len(keywords); i += 1 {
                 if keywords[i] == string(s) {
+                    attrib_counts[i] += 1
                     token.kind = .Keywords_Begin + cast(Token_Kind)(1 + i)
                     assert(token.kind < .Keywords_End)
                     break check_for_keyword
@@ -262,12 +293,97 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
             return model, false
         }
     }
+    append(&tokens, Token{.End, {}})
     
     //
     // PARSING
     //
-    for token in tokens {
-        _ = token
+    p := Parser{tokens[:], tokens[0], 0}
+    
+    keywords_begin := cast(int)Token_Kind.Keywords_End - 1
+    vertices := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.V])
+    tex_coords := make([dynamic][2]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VT])
+    normals := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VN])
+    indices := make([dynamic]i32, 0, 3 * attrib_counts[keywords_begin - cast(int)Token_Kind.VN])
+    defer delete(indices)
+    defer delete(normals)
+    defer delete(tex_coords)
+    defer delete(vertices)
+    
+    for p.tok.kind != .End {
+        if p.tok.kind <= .Keywords_Begin || p.tok.kind >= .Keywords_End {
+            fmt.println("Error while parsing: Expected a keyword.")
+            assert(false)
+            return model, false
+        }
+        assert(.Keywords_Begin < p.tok.kind && p.tok.kind < .Keywords_End)
+        
+        kind := p.tok.kind
+        advance_token(&p)
+        
+        #partial switch kind {
+        case .V:
+            // parse v
+            for i in 0..<4 {
+                if p.tok.kind == .Float {
+                    // TODO
+                    advance_token(&p)
+                } else {
+                    if i < 3 {
+                        fmt.println("Error while parsing: Expected token of kind Float.")
+                        assert(false)
+                        return model, false
+                    }
+                }
+            }
+            
+        case .VT:
+            // parse vt
+            for i in 0..<3 {
+                if p.tok.kind == .Float {
+                    // TODO
+                    advance_token(&p)
+                } else {
+                    if i < 1 {
+                        fmt.println("Error while parsing: Expected token of kind Float.")
+                        assert(false)
+                        return model, false
+                    }
+                }
+            }
+            
+        case .VN:
+            // parse vn
+            for _ in 0..<3 {
+                if p.tok.kind == .Float {
+                    // TODO
+                    advance_token(&p)
+                } else {
+                    fmt.println("Error while parsing: Expected token of kind Float.")
+                    assert(false)
+                    return model, false
+                }
+            }
+            
+        case .F:
+            // parse f
+            // TODO
+            _ = 1
+            
+        case .O:
+            if p.tok.kind != .Identifier {
+                fmt.println("Error while parsing: Expected token of kind Identifier.")
+                assert(false)
+                return model, false
+            }
+            // TODO
+            advance_token(&p)
+            
+        case:
+            fmt.println("Error while parsing: Unexpected token.")
+            assert(false)
+            return model, false
+        }
     }
     
     return model, true
