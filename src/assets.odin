@@ -92,7 +92,7 @@ undo_char :: proc(t: ^Tokenizer) {
 scan_identifier :: proc(t: ^Tokenizer) -> []u8 {
     offset := t.offset
     
-    for !t.end_of_file && (is_letter(t.char) || is_digit(t.char)) {
+    for !t.end_of_file && (is_letter(t.char) || is_digit(t.char) || t.char == '_' || t.char == '.' || t.char == '-') {
         advance_char(t)
     }
     
@@ -120,6 +120,16 @@ scan_number :: proc(t: ^Tokenizer) -> (kind: Token_Kind, s: []u8) {
     return kind, t.data[offset:t.offset]
 }
 
+scan_comment :: proc(t: ^Tokenizer) {
+    for !is_end_of_line(t.char) {
+        advance_char(t)
+    }
+    for is_end_of_line(t.char) {
+        advance_char(t)
+    }
+}
+
+// TODO: this is not up to date; compare scan_identifier
 is_obj_identifier :: proc(str: string) -> bool {
     if len(str) == 0 {
         return false
@@ -196,6 +206,8 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     
     t := Tokenizer{data, data[0], 0, false}
     
+    line_count := 0
+    
     for !t.end_of_file {
         token := Token{}
         switch c := t.char; true {
@@ -230,13 +242,32 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
             
             advance_char(&t)
             
+        case c == '#':
+            advance_char(&t)
+            scan_comment(&t)
+            
+        case is_end_of_line(c):
+            line_count += 1
+            advance_char(&t)
+            if is_end_of_line(t.char) {
+                advance_char(&t)
+            }
+            
         case is_whitespace(c):
             advance_char(&t)
             
         case:
-            fmt.println("Unrecognized symbol.")
+            fmt.println("Error while parsing: Unrecognized symbol at line %d.", line_count)
+            assert(false)
             return model, false
         }
+    }
+    
+    //
+    // PARSING
+    //
+    for token in tokens {
+        _ = token
     }
     
     return model, true
