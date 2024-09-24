@@ -2,16 +2,17 @@ package flightsim
 
 import "core:fmt"
 import "core:os"
+import "core:strconv"
 
 Vertex :: struct {
     position: [4]f32,
-    uv: [2]f32,
+    uv: [3]f32,
     normal: [3]f32,
 }
 
 Model :: struct {
-    vertex_array: ^Vertex,
-    index_array: ^u32,
+    vertex_array: [dynamic]Vertex,
+    index_array: [dynamic]u32,
     vertex_count: i32,
     index_count: i32,
 }
@@ -224,8 +225,17 @@ expect :: proc(p: ^Parser, kind: Token_Kind, min: int, max: int) -> bool {
     }
     return true
 }
-    
-obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
+
+get_index :: proc(model: ^Model, vertex: ^Vertex) -> int {
+    for v, i in model.vertex_array {
+        if v == vertex^ {
+            return i
+        }
+    }
+    return -1
+}
+
+parse_obj :: proc(data: []u8) -> (model: Model, success: bool) {
     // 
     // TOKENIZATION
     // 
@@ -301,15 +311,16 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
     p := Parser{tokens[:], tokens[0], 0}
     
     keywords_begin := cast(int)Token_Kind.Keywords_End - 1
-    vertices := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.V])
-    tex_coords := make([dynamic][2]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VT])
+    positions := make([dynamic][4]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.V])
+    tex_coords := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VT])
     normals := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VN])
-    indices := make([dynamic]i32, 0, 3 * attrib_counts[keywords_begin - cast(int)Token_Kind.VN])
-    defer delete(indices)
     defer delete(normals)
     defer delete(tex_coords)
-    defer delete(vertices)
+    defer delete(positions)
     
+    model.vertex_array = make([dynamic]Vertex)
+    model.index_array = make([dynamic]u32)
+
     for p.tok.kind != .End {
         if p.tok.kind <= .Keywords_Begin || p.tok.kind >= .Keywords_End {
             fmt.println("Error while parsing: Expected a keyword.")
@@ -324,9 +335,10 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
         #partial switch kind {
         case .V:
             // parse v
+            position := [4]f32{}
             for i in 0..<4 {
                 if p.tok.kind == .Float {
-                    // TODO
+                    position[i] = cast(f32)strconv.atof(transmute(string)p.tok.value)
                     advance_token(&p)
                 } else {
                     if i < 3 {
@@ -336,12 +348,14 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
                     }
                 }
             }
+            append(&positions, position)
             
         case .VT:
             // parse vt
+            tex_coord := [3]f32{}
             for i in 0..<3 {
                 if p.tok.kind == .Float {
-                    // TODO
+                    tex_coord[i] = cast(f32)strconv.atof(transmute(string)p.tok.value)
                     advance_token(&p)
                 } else {
                     if i < 1 {
@@ -351,12 +365,14 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
                     }
                 }
             }
+            append(&tex_coords, tex_coord)
             
         case .VN:
             // parse vn
-            for _ in 0..<3 {
+            normal := [3]f32{}
+            for i in 0..<3 {
                 if p.tok.kind == .Float {
-                    // TODO
+                    normal[i] = cast(f32)strconv.atof(transmute(string)p.tok.value)
                     advance_token(&p)
                 } else {
                     fmt.println("Error while parsing: Expected token of kind Float.")
@@ -364,12 +380,79 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
                     return model, false
                 }
             }
+            append(&normals, normal)
             
         case .F:
             // parse f
-            // TODO
-            _ = 1
-            
+            poly_count := 0
+            pidx, uvidx, nidx: i32 = 0, 0, 0
+            for p.tok.kind == .Integer && p.tok.kind != .End {
+                poly_count += 1
+
+                if poly_count > 3 {
+                    fmt.println("Error while parsing: Only triangle meshes supported for now.")
+                    assert(false)
+                    return model, false
+                }
+
+                if p.tok.kind == .Integer {
+                    pidx = cast(i32)strconv.atoi(transmute(string)p.tok.value)
+                    advance_token(&p)
+                } else {
+                    fmt.println("Error while parsing: Expected a token of kind Integer.")
+                    assert(false)
+                    return model, false
+                }
+
+                if p.tok.kind == .Slash {
+                    advance_token(&p)
+                    if p.tok.kind == .Integer {
+                        uvidx = cast(i32)strconv.atoi(transmute(string)p.tok.value)
+                        advance_token(&p)
+                        if p.tok.kind == .Slash {
+                            advance_token(&p)
+                            if p.tok.kind == .Integer {
+                                nidx = cast(i32)strconv.atoi(transmute(string)p.tok.value)
+                                advance_token(&p)
+                            } else {
+                                fmt.println("Error while parsing: Expected a token of kind Integer.")
+                                assert(false)
+                                return model, false
+                            }
+                        }
+                    } else if p.tok.kind == .Slash {
+                        advance_token(&p)
+                        if p.tok.kind == .Integer {
+                            nidx = cast(i32)strconv.atoi(transmute(string)p.tok.value)
+                            advance_token(&p)
+                        } else {
+                            fmt.println("Error while parsing: Expected a token of kind Integer.")
+                            assert(false)
+                            return model, false
+                        }
+                    } else {
+                        fmt.println("Error while parsing: Expected a token of kind Integer or Slash.")
+                        assert(false)
+                        return model, false
+                    }
+                }
+
+                vertex := Vertex{positions[pidx-1], tex_coords[uvidx-1], normals[nidx-1]}
+                index := get_index(&model, &vertex)
+                if index < 0 {
+                    append(&model.index_array, cast(u32)len(model.vertex_array))
+                    append(&model.vertex_array, vertex)
+                } else {
+                    append(&model.index_array, cast(u32)index)
+                }
+            }
+
+            if poly_count != 3 {
+                fmt.println("Error while parsing: Only triangle meshes supported for now.")
+                assert(false)
+                return model, false
+            }
+           
         case .O:
             if p.tok.kind != .Identifier {
                 fmt.println("Error while parsing: Expected token of kind Identifier.")
@@ -392,5 +475,5 @@ obj_parse :: proc(data: []u8) -> (model: Model, success: bool) {
 load_model :: proc(filename: string) -> (model: Model, success: bool) {
     data := os.read_entire_file_from_filename(filename) or_return
     defer delete(data)
-    return obj_parse(data)
+    return parse_obj(data)
 }
