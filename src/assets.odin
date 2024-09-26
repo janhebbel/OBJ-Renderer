@@ -473,7 +473,7 @@ parse_obj :: proc(data: []u8) -> (model: Model, success: bool) {
 }
 
 load_model :: proc(filename: string) -> (model: Model, success: bool) {
-        data := os.read_entire_file_from_filename(filename) or_return
+        data := os.read_entire_file(filename) or_return
         defer delete(data)
         return parse_obj(data)
 }

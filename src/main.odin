@@ -1,8 +1,11 @@
 package flightsim
 
 import "core:fmt"
+//import "core:strings"
+import "core:os"
 import win32 "core:sys/windows"
 import d3d "vendor:directx/d3d11"
+//import d3dc "vendor:directx/d3d_compiler"
 import "vendor:directx/dxgi"
 
 window_width  :: 1280
@@ -203,6 +206,30 @@ main :: proc()
                 }
 
                 imm_context.RSSetState(imm_context, rasterizer_state)
+
+                vs_data, vs_success := os.read_entire_file("default_vertex.cso")
+                if !vs_success {
+                        panic("Failed to read default_vertex.cso!")
+                }
+                defer delete(vs_data)
+
+                vertex_shader: ^d3d.IVertexShader
+                hr = device.CreateVertexShader(device, cast(rawptr)&vs_data[0], len(vs_data), nil, &vertex_shader)
+                if hr != win32.S_OK {
+                        panic("Failed to create a vertex shader.")
+                }
+                
+                ps_data, ps_success := os.read_entire_file("default_pixel.cso")
+                if !ps_success {
+                        panic("Failed to read default_pixel.cso!")
+                }
+                defer delete(ps_data)
+
+                pixel_shader: ^d3d.IPixelShader
+                hr = device.CreatePixelShader(device, cast(rawptr)&ps_data[0], len(ps_data), nil, &pixel_shader)
+                if hr != win32.S_OK {
+                        panic("Failed to create a vertex shader.")
+                }
         }
         
         //
