@@ -5,7 +5,7 @@ cbuffer Matrix_Buffer {
 };
 
 struct Vertex_In {
-        float4 position : POSITIION;
+        float4 position : POSITION;
         float2 tex_coord : TEXCOORD;
         float3 normal : NORMAL;
 };

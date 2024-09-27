@@ -61,6 +61,12 @@ main :: proc()
         swapchain: ^dxgi.ISwapChain1
         render_target_view: ^d3d.IRenderTargetView
         depth_stencil_view: ^d3d.IDepthStencilView
+        input_layout: ^d3d.IInputLayout
+        vertex_shader: ^d3d.IVertexShader
+        pixel_shader: ^d3d.IPixelShader
+        cbuffer: ^d3d.IBuffer
+        sampler_state: ^d3d.ISamplerState
+        texture_view: ^d3d.IShaderResourceView
 
         //
         // Init D3D11
@@ -213,7 +219,6 @@ main :: proc()
                 }
                 defer delete(vs_data)
 
-                vertex_shader: ^d3d.IVertexShader
                 hr = device.CreateVertexShader(device, cast(rawptr)&vs_data[0], len(vs_data), nil, &vertex_shader)
                 if hr != win32.S_OK {
                         panic("Failed to create a vertex shader.")
@@ -225,11 +230,48 @@ main :: proc()
                 }
                 defer delete(ps_data)
 
-                pixel_shader: ^d3d.IPixelShader
                 hr = device.CreatePixelShader(device, cast(rawptr)&ps_data[0], len(ps_data), nil, &pixel_shader)
                 if hr != win32.S_OK {
                         panic("Failed to create a vertex shader.")
                 }
+
+                input_element_descs := [?]d3d.INPUT_ELEMENT_DESC{
+                        {"POSITION", 0, .R32G32B32A32_FLOAT, 0, 0, .VERTEX_DATA, 0},
+                        {"TEXCOORD", 0, .R32G32_FLOAT, 0, d3d.APPEND_ALIGNED_ELEMENT, .VERTEX_DATA, 0},
+                        {"NORMAL", 0, .R32G32B32_FLOAT, 0, d3d.APPEND_ALIGNED_ELEMENT, .VERTEX_DATA, 0},
+                }
+                hr = device.CreateInputLayout(device, cast(^d3d.INPUT_ELEMENT_DESC)&input_element_descs, 
+                                              cast(u32)len(input_element_descs), (rawptr)(&vs_data[0]), len(vs_data), 
+                                              &input_layout)
+                if hr != win32.S_OK {
+                        panic("Failed to create an input layout.")
+                }
+
+                buffer_desc := d3d.BUFFER_DESC{
+                        Usage = .DEFAULT,
+                        ByteWidth = size_of(float4x4) * 3,
+                        BindFlags = {.CONSTANT_BUFFER},
+                        CPUAccessFlags = {},
+                }
+                hr = device.CreateBuffer(device, &buffer_desc, nil, &cbuffer)
+                if hr != win32.S_OK {
+                        panic("Failed to create a constant buffer.")
+                }
+
+                sampler_desc := d3d.SAMPLER_DESC{}
+                sampler_desc.Filter = .MIN_MAG_MIP_LINEAR
+                sampler_desc.AddressU = .WRAP
+                sampler_desc.AddressV = .WRAP
+                sampler_desc.AddressW = .WRAP
+                hr = device.CreateSamplerState(device, &sampler_desc, &sampler_state)
+                if hr != win32.S_OK {
+                        panic("Failed to create a sampler state.")
+                }
+
+                texture_desc := d3d.TEXTURE2D_DESC{}
+                texture: ^d3d.ITexture2D
+                hr = device.CreateTexture2D(device, &texture_desc, nil, &texture)
+                // hr = device.CreateShaderResourceView(device, 
         }
         
         //
@@ -275,6 +317,15 @@ main :: proc()
                                          MinDepth = 0.0, MaxDepth = 1.0}
                 imm_context.RSSetViewports(imm_context, 1, &viewport)
                 imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, depth_stencil_view)
+
+                imm_context.IASetInputLayout(imm_context, input_layout) 
+
+                imm_context.VSSetShader(imm_context, vertex_shader, nil, 0)
+                imm_context.VSSetConstantBuffers(imm_context, 0, 1, &cbuffer)
+
+                imm_context.PSSetShader(imm_context, pixel_shader, nil, 0)
+                imm_context.PSSetShaderResources(imm_context, 0, 1, &texture_view)
+                imm_context.PSSetSamplers(imm_context, 0, 1, &sampler_state)
 
                 clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
                 imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
