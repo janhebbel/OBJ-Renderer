@@ -196,7 +196,7 @@ main :: proc()
                 // create a rasterizer state for increased customization options
                 rasterizer_desc := d3d.RASTERIZER_DESC{}
                 rasterizer_desc.FillMode = .WIREFRAME // .WIREFRAME or .SOLID
-                rasterizer_desc.CullMode = .NONE // .NONE or .FRONT or .BACK
+                rasterizer_desc.CullMode = .FRONT // .NONE or .FRONT or .BACK
                 rasterizer_desc.FrontCounterClockwise = win32.FALSE
                 rasterizer_desc.DepthBias = 0
                 rasterizer_desc.DepthBiasClamp = 0.0
@@ -279,7 +279,6 @@ main :: proc()
         
         cube, success := load_model("..\\res\\cube.obj")
         assert(success, "Failed to load model.")
-        _ = cube
 
         // Create vertex buffer
         vertex_buffer_desc := d3d.BUFFER_DESC{
@@ -389,8 +388,9 @@ main :: proc()
                         0, 0, 1, 0,
                         0, 0, 0, 1,
                 }
-                vs_constant_buffer_data.view = look_at({0, 0, 3}, {0, 0, 0}, {0, 1, 0})
+                vs_constant_buffer_data.view = look_at({0, 0, -3}, {0, 0, 0}, {0, 1, 0})
                 vs_constant_buffer_data.proj = orthographic(-8, 8, -4.5, 4.5, 0.1, 100.0)
+                //vs_constant_buffer_data.proj = perspective(90/360.0, 16.0 / 9.0, 0.1, 100.0)
 
                 mapped_subresource := d3d.MAPPED_SUBRESOURCE{}
                 imm_context.Map(imm_context, constant_buffer, 0, .WRITE_DISCARD, {}, &mapped_subresource)

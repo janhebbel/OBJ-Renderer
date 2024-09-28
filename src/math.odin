@@ -52,16 +52,17 @@ orthographic :: proc(left, right, bottom, top, near, far: float) -> float4x4
         }
 }
 
-// TODO: Fix this matrix.
+// TODO: Confirm this works...
 perspective :: proc(fov, aspect, near, far: float) -> float4x4
 {
-        f := cot(0.5 * fov)
-        inv_depth := 1.0 / (near - far)
+        tmp1 := 1 / linalg.tan(fov * 0.5)
+        tmp2 := (1 / aspect) * tmp1
+        depth := far - near
 
         return float4x4{
-                f * aspect, 0.0, 0.0,                      0.0,
-                0.0,        f,   0.0,                      0.0,
-                0.0,        0.0, (far + near) * inv_depth, 2 * far * near * inv_depth,
-                0.0,        0.0, -1.0,                     0.0,
+                tmp2, 0,    0,          0,
+                0,    tmp1, 0,          0,
+                0,    0,    far / depth, -(near * far) / depth,
+                0,    0,    1,          0,
         }
 }
