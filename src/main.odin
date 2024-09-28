@@ -1,5 +1,6 @@
 package flightsim
 
+import "base:runtime"
 import "core:fmt"
 //import "core:strings"
 import "core:os"
@@ -64,9 +65,8 @@ main :: proc()
         input_layout: ^d3d.IInputLayout
         vertex_shader: ^d3d.IVertexShader
         pixel_shader: ^d3d.IPixelShader
-        cbuffer: ^d3d.IBuffer
-        sampler_state: ^d3d.ISamplerState
-        texture_view: ^d3d.IShaderResourceView
+        // sampler_state: ^d3d.ISamplerState
+        // texture_view: ^d3d.IShaderResourceView
 
         //
         // Init D3D11
@@ -196,7 +196,7 @@ main :: proc()
                 // create a rasterizer state for increased customization options
                 rasterizer_desc := d3d.RASTERIZER_DESC{}
                 rasterizer_desc.FillMode = .WIREFRAME // .WIREFRAME or .SOLID
-                rasterizer_desc.CullMode = .FRONT // .NONE or .FRONT or .BACK
+                rasterizer_desc.CullMode = .NONE // .NONE or .FRONT or .BACK
                 rasterizer_desc.FrontCounterClockwise = win32.FALSE
                 rasterizer_desc.DepthBias = 0
                 rasterizer_desc.DepthBiasClamp = 0.0
@@ -247,30 +247,19 @@ main :: proc()
                         panic("Failed to create an input layout.")
                 }
 
-                buffer_desc := d3d.BUFFER_DESC{
-                        Usage = .DEFAULT,
-                        ByteWidth = size_of(float4x4) * 3,
-                        BindFlags = {.CONSTANT_BUFFER},
-                        CPUAccessFlags = {},
-                }
-                hr = device.CreateBuffer(device, &buffer_desc, nil, &cbuffer)
-                if hr != win32.S_OK {
-                        panic("Failed to create a constant buffer.")
-                }
+                // sampler_desc := d3d.SAMPLER_DESC{}
+                // sampler_desc.Filter = .MIN_MAG_MIP_LINEAR
+                // sampler_desc.AddressU = .WRAP
+                // sampler_desc.AddressV = .WRAP
+                // sampler_desc.AddressW = .WRAP
+                // hr = device.CreateSamplerState(device, &sampler_desc, &sampler_state)
+                // if hr != win32.S_OK {
+                //         panic("Failed to create a sampler state.")
+                // }
 
-                sampler_desc := d3d.SAMPLER_DESC{}
-                sampler_desc.Filter = .MIN_MAG_MIP_LINEAR
-                sampler_desc.AddressU = .WRAP
-                sampler_desc.AddressV = .WRAP
-                sampler_desc.AddressW = .WRAP
-                hr = device.CreateSamplerState(device, &sampler_desc, &sampler_state)
-                if hr != win32.S_OK {
-                        panic("Failed to create a sampler state.")
-                }
-
-                texture_desc := d3d.TEXTURE2D_DESC{}
-                texture: ^d3d.ITexture2D
-                hr = device.CreateTexture2D(device, &texture_desc, nil, &texture)
+                // texture_desc := d3d.TEXTURE2D_DESC{}
+                // texture: ^d3d.ITexture2D
+                // hr = device.CreateTexture2D(device, &texture_desc, nil, &texture)
                 // hr = device.CreateShaderResourceView(device, 
         }
         
@@ -291,6 +280,72 @@ main :: proc()
         cube, success := load_model("..\\res\\cube.obj")
         assert(success, "Failed to load model.")
         _ = cube
+
+        // Create vertex buffer
+        vertex_buffer_desc := d3d.BUFFER_DESC{
+                Usage = .DEFAULT,
+                ByteWidth = cast(u32)len(cube.vertex_array) * size_of(Vertex),
+                BindFlags = {.VERTEX_BUFFER},
+                CPUAccessFlags = {},
+                MiscFlags = {},
+        }
+
+        vertex_data := d3d.SUBRESOURCE_DATA{
+                pSysMem = &cube.vertex_array[0],
+                SysMemPitch = 0,
+                SysMemSlicePitch = 0,
+        }
+
+        vertex_buffer: ^d3d.IBuffer
+        hr = device.CreateBuffer(device, &vertex_buffer_desc, &vertex_data, &vertex_buffer)
+        if hr != win32.S_OK {
+                panic("Failed to create the vertex buffer!")
+        }
+
+        stride: u32 = size_of(Vertex)
+        offset: u32 = 0
+
+        // Create index buffer
+        index_buffer_desc := d3d.BUFFER_DESC{
+                Usage = .DEFAULT,
+                ByteWidth = cast(u32)len(cube.index_array) * size_of(u32),
+                BindFlags = {.INDEX_BUFFER},
+                CPUAccessFlags = {},
+                MiscFlags = {},
+        }
+
+        index_data := d3d.SUBRESOURCE_DATA{
+                pSysMem = &cube.index_array[0],
+                SysMemPitch = 0,
+                SysMemSlicePitch = 0,
+        }
+
+        index_buffer: ^d3d.IBuffer
+        hr = device.CreateBuffer(device, &index_buffer_desc, &index_data, &index_buffer)
+        if hr != win32.S_OK {
+                panic("Failed to create the index buffer!")
+        }
+
+        // Create constant buffer
+        VS_Constant_Buffer :: struct {
+                model: float4x4,
+                view:  float4x4,
+                proj:  float4x4,
+        }
+
+        constant_buffer_desc := d3d.BUFFER_DESC{
+                Usage = .DYNAMIC,
+                ByteWidth = size_of(VS_Constant_Buffer),
+                BindFlags = {.CONSTANT_BUFFER},
+                CPUAccessFlags = {.WRITE},
+                MiscFlags = {},
+        }
+
+        constant_buffer: ^d3d.IBuffer
+        hr = device.CreateBuffer(device, &constant_buffer_desc, nil, &constant_buffer)
+        if hr != win32.S_OK {
+                panic("Failed to create the constant buffer!")
+        }
 
         //
         // Main Loop
@@ -318,18 +373,39 @@ main :: proc()
                 imm_context.RSSetViewports(imm_context, 1, &viewport)
                 imm_context.OMSetRenderTargets(imm_context, 1, &render_target_view, depth_stencil_view)
 
-                imm_context.IASetInputLayout(imm_context, input_layout) 
+                imm_context.IASetInputLayout(imm_context, input_layout)
+                imm_context.IASetVertexBuffers(imm_context, 0, 1, &vertex_buffer, &stride, &offset)
+                imm_context.IASetIndexBuffer(imm_context, index_buffer, .R32_UINT, 0)
+                imm_context.IASetPrimitiveTopology(imm_context, .TRIANGLELIST)
 
                 imm_context.VSSetShader(imm_context, vertex_shader, nil, 0)
-                imm_context.VSSetConstantBuffers(imm_context, 0, 1, &cbuffer)
+                imm_context.VSSetConstantBuffers(imm_context, 0, 1, &constant_buffer)
+
+                // Supplying the constant buffer with data
+                vs_constant_buffer_data := VS_Constant_Buffer{}
+                vs_constant_buffer_data.model = matrix[4, 4]float{
+                        1, 0, 0, 0,
+                        0, 1, 0, 0,
+                        0, 0, 1, 0,
+                        0, 0, 0, 1,
+                }
+                vs_constant_buffer_data.view = look_at({0, 0, 3}, {0, 0, 0}, {0, 1, 0})
+                vs_constant_buffer_data.proj = orthographic(-8, 8, -4.5, 4.5, 0.1, 100.0)
+
+                mapped_subresource := d3d.MAPPED_SUBRESOURCE{}
+                imm_context.Map(imm_context, constant_buffer, 0, .WRITE_DISCARD, {}, &mapped_subresource)
+                runtime.mem_copy(mapped_subresource.pData, &vs_constant_buffer_data, size_of(vs_constant_buffer_data))
+                imm_context.Unmap(imm_context, constant_buffer, 0)
 
                 imm_context.PSSetShader(imm_context, pixel_shader, nil, 0)
-                imm_context.PSSetShaderResources(imm_context, 0, 1, &texture_view)
-                imm_context.PSSetSamplers(imm_context, 0, 1, &sampler_state)
+                // imm_context.PSSetShaderResources(imm_context, 0, 1, &texture_view)
+                // imm_context.PSSetSamplers(imm_context, 0, 1, &sampler_state)
 
-                clear_color := [?]f32{0.2, 0.2, 0.3, 1.0}
+                clear_color := [?]f32{0.0, 0.0, 0.0, 1.0}
                 imm_context.ClearRenderTargetView(imm_context, render_target_view, &clear_color)
                 imm_context.ClearDepthStencilView(imm_context, depth_stencil_view, {.DEPTH, .STENCIL}, 1.0, 0)
+
+                imm_context.DrawIndexed(imm_context, cast(u32)len(cube.index_array), 0, 0)
 
                 hr = swapchain.Present(swapchain, 0, present_flags) // 0 & .ALLOW_TEARING = no vsync
                 assert(hr == win32.S_OK)

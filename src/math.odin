@@ -16,21 +16,21 @@ cot :: proc(v: float) -> float
         return linalg.cos(v) / linalg.sin(v)
 }
 
-look_at :: proc(pos: float3, eye: float3, fake_up: float3) -> float4x4
+look_at :: proc(pos: float3, at: float3, up: float3) -> float4x4
 {
-        backward := pos - eye
-        right := linalg.cross(fake_up, backward)
-        up := linalg.cross(backward, right)
+        zaxis := linalg.normalize(at - pos)
+        xaxis := linalg.normalize(linalg.cross(up, zaxis))
+        yaxis := linalg.normalize(linalg.cross(zaxis, xaxis))
 
-        cos1 := linalg.dot(right, pos)
-        cos2 := linalg.dot(up, pos)
-        cos3 := linalg.dot(backward, pos)
+        cosx := linalg.dot(xaxis, pos)
+        cosy := linalg.dot(yaxis, pos)
+        cosz := linalg.dot(zaxis, pos)
 
         return float4x4{
-                right.x,    right.y,    right.z,    -cos1,
-                up.x,       up.y,       up.z,       -cos2,
-                backward.x, backward.y, backward.z, -cos3,
-                0.0,        0.0,        0.0,        1.0,
+                xaxis.x, yaxis.x, zaxis.x, 0,
+                xaxis.y, yaxis.y, zaxis.y, 0,
+                xaxis.z, yaxis.z, zaxis.z, 0,
+                -cosx,   -cosy,   -cosz,   1,
         }
 }
 
@@ -40,18 +40,19 @@ orthographic :: proc(left, right, bottom, top, near, far: float) -> float4x4
         height := top - bottom
         depth  := far - near
 
-        m30 := (right + left) / width
-        m31 := (top + bottom) / height
-        m32 := (far + near)   / depth
+        tmp1 := -(right + left) / width
+        tmp2 := -(top + bottom) / height
+        tmp3 := -near / depth
 
         return float4x4{
-                2.0 / width, 0.0,        0.0,          -m30,
-                0.0,         2 / height, 0.0,          -m31,
-                0.0,         0.0,        -2.0 / depth, -m32,
-                0.0,         0.0,        0.0,          1.0,
+                2 / width, 0,          0,          0,
+                0,         2 / height, 0,          0,
+                0,         0,          1 / depth,  0,
+                tmp1,      tmp2,       tmp3,       1,
         }
 }
 
+// TODO: Fix this matrix.
 perspective :: proc(fov, aspect, near, far: float) -> float4x4
 {
         f := cot(0.5 * fov)

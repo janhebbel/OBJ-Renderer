@@ -6,15 +6,13 @@ import "core:strconv"
 
 Vertex :: struct {
         position: [4]f32,
-        uv: [3]f32,
+        uv: [2]f32,
         normal: [3]f32,
 }
 
 Model :: struct {
         vertex_array: [dynamic]Vertex,
         index_array: [dynamic]u32,
-        vertex_count: i32,
-        index_count: i32,
 }
 
 Tokenizer :: struct {
@@ -312,7 +310,7 @@ parse_obj :: proc(data: []u8) -> (model: Model, success: bool) {
         
         keywords_begin := cast(int)Token_Kind.Keywords_End - 1
         positions := make([dynamic][4]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.V])
-        tex_coords := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VT])
+        tex_coords := make([dynamic][2]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VT])
         normals := make([dynamic][3]f32, 0, attrib_counts[keywords_begin - cast(int)Token_Kind.VN])
         defer delete(normals)
         defer delete(tex_coords)
@@ -348,12 +346,14 @@ parse_obj :: proc(data: []u8) -> (model: Model, success: bool) {
                                         }
                                 }
                         }
+                        if position[3] == 0 { position[3] = 1 }
                         append(&positions, position)
                         
                 case .VT:
                         // parse vt
-                        tex_coord := [3]f32{}
+                        tex_coord := [2]f32{}
                         for i in 0..<3 {
+                                if i > 2 { panic("3D texture coordinates are not yet supported!") }
                                 if p.tok.kind == .Float {
                                         tex_coord[i] = cast(f32)strconv.atof(transmute(string)p.tok.value)
                                         advance_token(&p)

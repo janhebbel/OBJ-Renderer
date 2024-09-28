@@ -6,12 +6,13 @@
 // };
 
 struct Pixel_In {
-        float2 tex_coord : TEXCOORD;
+        float4 position : SV_POSITION;
+        float2 tex_coord : TEXCOORD0;
         float3 normal : NORMAL;
 };
 
 float4 pixel_main(Pixel_In pixel_in) : SV_TARGET
 {
         // return tex.Sample(texture_sampler, pixel_in.tex_coord);
-        return float4(0.2f, 0.3f, 0.4f, 1.0f);
+        return float4(1.0f, 1.0f, 1.0f, 1.0f);
 }
