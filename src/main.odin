@@ -2,6 +2,7 @@ package flightsim
 
 import "base:runtime"
 import "core:fmt"
+import "core:math/linalg"
 //import "core:strings"
 import "core:os"
 import win32 "core:sys/windows"
@@ -277,7 +278,7 @@ main :: proc()
                 present_flags |= {.ALLOW_TEARING} // for disabling vsync
         }
         
-        cube, success := load_model("..\\res\\f14.obj")
+        cube, success := load_model("..\\res\\cube.obj")
         assert(success, "Failed to load model.")
 
         // Create vertex buffer
@@ -346,6 +347,14 @@ main :: proc()
                 panic("Failed to create the constant buffer!")
         }
 
+        // ---
+        camera_pos := float3{0, 0, -5}
+        camera_forward := float3{0, 0, 1}
+        camera_up := float3{0, 1, 0}
+        camera_yaw := linalg.PI * 0.5
+        camera_pitch := 0.0
+        // speed: f32 = 10.0
+
         //
         // Main Loop
         //
@@ -361,6 +370,56 @@ main :: proc()
                         win32.TranslateMessage(&message)
                         win32.DispatchMessageW(&message)
                 }
+
+                // Updating
+                xpos, ypos: f64
+                cursor_pos := win32.POINT{}
+                win32.GetCursorPos(&cursor_pos)
+                xpos = cast(f64)cursor_pos.x
+                ypos = cast(f64)cursor_pos.y
+
+                window_size := win32.RECT{}
+                win32.GetWindowRect(window, &window_size)
+                middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
+                middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
+
+                dx := xpos - (cast(f64)middle_x / 2)
+                dy := ypos - (cast(f64)middle_y / 2)
+
+                if dx != 0 || dy != 0 {
+                        win32.SetCursorPos(middle_x, middle_y)
+                }
+
+                camera_yaw += dx
+                camera_pitch += dy
+
+                if camera_pitch > linalg.to_radians(85.0) {
+                        camera_pitch = linalg.to_radians(85.0)
+                } else if camera_pitch < -linalg.to_radians(85.0) {
+                        camera_pitch = -linalg.to_radians(85.0)
+                }
+
+                camera_forward.x = cast(f32)(linalg.cos(camera_yaw) * linalg.cos(camera_pitch))
+                camera_forward.y = cast(f32)(linalg.sin(camera_pitch))
+                camera_forward.z = cast(f32)(linalg.sin(camera_yaw) * linalg.cos(camera_pitch))
+                camera_forward = linalg.normalize(camera_forward)
+
+                // add := float3{}
+                // if is_down('W') {
+                //         camera_pos += camera_forward
+                // }
+                // if is_down('S') {
+                //         camera_pos -= camera_forward
+                // }
+                // if is_down('A') {
+                //         camera_pos -= linalg.normalize(linalg.cross(camera_forward, camera_up))
+                // }
+                // if is_down('D') {
+                //         camera_pos += linalg.normalize(linalg.cross(camera_forward, camera_up))
+                // }
+                // camera_pos += linalg.normalize(add) * float3{speed, speed, speed} * float3{delta_time, delta_time, delta_time}
+
+                update_key_was_down()
 
                 // Rendering
                 ClientRect: win32.RECT
@@ -388,7 +447,7 @@ main :: proc()
                         0, 0, 1, 0,
                         0, 0, 0, 1,
                 }
-                vs_constant_buffer_data.view = look_at({0, 0, -3}, {0, 0, 0}, {0, 1, 0})
+                vs_constant_buffer_data.view = look_at(camera_pos, camera_pos + camera_forward, camera_up)
                 //vs_constant_buffer_data.proj = orthographic(-8, 8, -4.5, 4.5, 0.1, 100.0)
                 vs_constant_buffer_data.proj = perspective(1.57, cast(float)window_width / window_height, 0.1, 100)
 
@@ -417,15 +476,22 @@ main :: proc()
 main_window_proc :: proc "stdcall" (hwnd: win32.HWND, msg: u32, wparam: win32.WPARAM, lparam: win32.LPARAM) -> int 
 {
         switch msg {
+        case win32.WM_ACTIVATEAPP:
+                clear_keyboard_state()
+                // wparam == win32.TRUE:  window activated 
+                // wparam == win32.FALSE: window deactivated
+                win32.ShowCursor(cast(win32.BOOL)wparam == win32.FALSE)
+                return 0
+
         case win32.WM_DESTROY, win32.WM_CLOSE, win32.WM_QUIT:
                 global_running = false
                 return 0
                 
         case win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYUP: 
-                key := win32.LOWORD(wparam)
+                key := cast(rune)win32.LOWORD(wparam)
                 
-                was_down := (lparam & (1 << 30)) != 0
-                down := (lparam & (1 << 31)) == 0
+                was_down: bool = (lparam & (1 << 30)) != 0
+                down: bool = (lparam & (1 << 31)) == 0
                 
                 if was_down != down {
                         alt_down := (lparam & (1 << 29)) != 0
@@ -438,10 +504,10 @@ main_window_proc :: proc "stdcall" (hwnd: win32.HWND, msg: u32, wparam: win32.WP
                                 global_running = false
                         }
                         
-                        // key_event(key, down);
+                        key_event(key, down)
                 }
-                
-                break
+
+                return 0
         }
         
         return win32.DefWindowProcW(hwnd, msg, wparam, lparam)
