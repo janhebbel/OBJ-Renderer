@@ -11,6 +11,10 @@ float4 :: [4]float
 float3x3 :: matrix[3, 3]float
 float4x4 :: matrix[4, 4]float
 
+turns_to_rad :: proc(turn: float) -> float {
+        return turn * 2 * linalg.PI
+}
+
 cot :: proc(v: float) -> float
 {
         return linalg.cos(v) / linalg.sin(v)
@@ -52,17 +56,18 @@ orthographic :: proc(left, right, bottom, top, near, far: float) -> float4x4
         }
 }
 
-// TODO: Confirm this works...
 perspective :: proc(fov, aspect, near, far: float) -> float4x4
 {
-        tmp1 := 1 / linalg.tan(fov * 0.5)
-        tmp2 := (1 / aspect) * tmp1
+        f := cot(0.5 * fov)
         depth := far - near
 
+        tmp1 := far / depth
+        tmp2 := near * far / depth
+
         return float4x4{
-                tmp2, 0,    0,          0,
-                0,    tmp1, 0,          0,
-                0,    0,    far / depth, -(near * far) / depth,
-                0,    0,    1,          0,
+                f / aspect, 0, 0,     0,
+                0,          f, 0,     0,
+                0,          0, tmp1,  1,
+                0,          0, -tmp2, 0,
         }
 }
