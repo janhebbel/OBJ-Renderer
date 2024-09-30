@@ -14,6 +14,7 @@ window_width  :: 1280
 window_height :: 720
 
 global_running := true
+global_window_has_focus := false
 
 main :: proc() 
 {
@@ -277,8 +278,8 @@ main :: proc()
         when ODIN_DEBUG {
                 present_flags |= {.ALLOW_TEARING} // for disabling vsync
         }
-        
-        cube, success := load_model("..\\res\\cube.obj")
+
+        cube, success := load_model("..\\res\\f14.obj")
         assert(success, "Failed to load model.")
 
         // Create vertex buffer
@@ -374,63 +375,65 @@ main :: proc()
 
                 // Updating
                 // Handling mouse input
-                xpos, ypos: f64
-                cursor_pos := win32.POINT{}
-                win32.GetCursorPos(&cursor_pos)
-                xpos = cast(f64)cursor_pos.x
-                ypos = cast(f64)cursor_pos.y
+                if global_window_has_focus {
+                        xpos, ypos: f64
+                        cursor_pos := win32.POINT{}
+                        win32.GetCursorPos(&cursor_pos)
+                        xpos = cast(f64)cursor_pos.x
+                        ypos = cast(f64)cursor_pos.y
 
-                // TODO: remove this once proper window resize management is implemented
-                window_size := win32.RECT{}
-                win32.GetWindowRect(window, &window_size)
-                middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
-                middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
+                        // TODO: remove this once proper window resize management is implemented
+                        window_size := win32.RECT{}
+                        win32.GetWindowRect(window, &window_size)
+                        middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
+                        middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
 
-                dx := xpos - cast(f64)middle_x
-                dy := ypos - cast(f64)middle_y
+                        dx := xpos - cast(f64)middle_x
+                        dy := ypos - cast(f64)middle_y
 
-                dx *= sensitivity
-                dy *= sensitivity
+                        dx *= sensitivity
+                        dy *= sensitivity
 
-                if dx != 0 || dy != 0 {
-                        win32.SetCursorPos(middle_x, middle_y)
+                        if dx != 0 || dy != 0 {
+                                win32.SetCursorPos(middle_x, middle_y)
+                        }
+
+                        camera_yaw += dx
+                        camera_pitch += dy
+
+                        if camera_pitch > 89.0 {
+                                camera_pitch = 89.0
+                        } else if camera_pitch < -89.0 {
+                                camera_pitch = -89.0
+                        }
+
+                        yaw_rad := -linalg.to_radians(camera_yaw)
+                        pitch_rad := -linalg.to_radians(camera_pitch)
+
+                        camera_forward.x = cast(f32)(linalg.cos(yaw_rad) * linalg.cos(pitch_rad))
+                        camera_forward.y = cast(f32)(linalg.sin(pitch_rad))
+                        camera_forward.z = cast(f32)(linalg.sin(yaw_rad) * linalg.cos(pitch_rad))
+                        camera_forward = linalg.normalize(camera_forward)
+
+                        // Handling keyboard input
+                        add := float3{}
+                        if is_down('W') {
+                                add += camera_forward
+                        }
+                        if is_down('S') {
+                                add -= camera_forward
+                        }
+                        if is_down('A') {
+                                add += linalg.normalize(linalg.cross(camera_forward, camera_up))
+                        }
+                        if is_down('D') {
+                                add -= linalg.normalize(linalg.cross(camera_forward, camera_up))
+                        }
+                        if (add.x != 0 || add.y != 0 || add.z != 0) { add = linalg.normalize(add) }
+                        camera_pos += add * {delta_time * speed, delta_time * speed, delta_time * speed}
+
+                        update_key_was_down()
                 }
-
-                camera_yaw += dx
-                camera_pitch += dy
-
-                if camera_pitch > 89.0 {
-                        camera_pitch = 89.0
-                } else if camera_pitch < -89.0 {
-                        camera_pitch = -89.0
-                }
-
-                yaw_rad := -linalg.to_radians(camera_yaw)
-                pitch_rad := -linalg.to_radians(camera_pitch)
-
-                camera_forward.x = cast(f32)(linalg.cos(yaw_rad) * linalg.cos(pitch_rad))
-                camera_forward.y = cast(f32)(linalg.sin(pitch_rad))
-                camera_forward.z = cast(f32)(linalg.sin(yaw_rad) * linalg.cos(pitch_rad))
-                camera_forward = linalg.normalize(camera_forward)
-
-                // Handling keyboard input
-                add := float3{}
-                if is_down('W') {
-                        add += camera_forward
-                }
-                if is_down('S') {
-                        add -= camera_forward
-                }
-                if is_down('A') {
-                        add += linalg.normalize(linalg.cross(camera_forward, camera_up))
-                }
-                if is_down('D') {
-                        add -= linalg.normalize(linalg.cross(camera_forward, camera_up))
-                }
-                if (add.x != 0 || add.y != 0 || add.z != 0) { add = linalg.normalize(add) }
-                camera_pos += add * {delta_time * speed, delta_time * speed, delta_time * speed}
-
-                update_key_was_down()
 
                 // Rendering
                 ClientRect: win32.RECT
@@ -452,12 +455,7 @@ main :: proc()
 
                 // Supplying the constant buffer with data
                 vs_constant_buffer_data := VS_Constant_Buffer{}
-                vs_constant_buffer_data.model = matrix[4, 4]float{
-                        1, 0, 0, 0,
-                        0, 1, 0, 0,
-                        0, 0, 1, 0,
-                        0, 0, 0, 1,
-                }
+                vs_constant_buffer_data.model = scale({0.1, 0.1, 0.1})
                 vs_constant_buffer_data.view = look_at(camera_pos, camera_pos + camera_forward, camera_up)
                 //vs_constant_buffer_data.proj = orthographic(-8, 8, -4.5, 4.5, 0.1, 100.0)
                 vs_constant_buffer_data.proj = perspective(1.57, cast(float)window_width / window_height, 0.1, 100)
@@ -491,7 +489,8 @@ main_window_proc :: proc "stdcall" (hwnd: win32.HWND, msg: u32, wparam: win32.WP
                 clear_keyboard_state()
                 // wparam == win32.TRUE:  window activated 
                 // wparam == win32.FALSE: window deactivated
-                // win32.ShowCursor(cast(win32.BOOL)wparam == win32.FALSE)
+                global_window_has_focus = cast(win32.BOOL)wparam == win32.TRUE
+                win32.ShowCursor(global_window_has_focus == false)
                 return 0
 
         case win32.WM_DESTROY, win32.WM_CLOSE, win32.WM_QUIT:

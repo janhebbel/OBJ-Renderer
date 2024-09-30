@@ -20,6 +20,10 @@ cot :: proc(v: float) -> float
         return linalg.cos(v) / linalg.sin(v)
 }
 
+scale :: proc(scale: float3) -> float4x4 {
+        return linalg.transpose(linalg.matrix4_scale_f32(scale))
+}
+
 look_at :: proc(pos: float3, at: float3, up: float3) -> float4x4
 {
         zaxis := linalg.normalize(at - pos)
