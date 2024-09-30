@@ -351,9 +351,10 @@ main :: proc()
         camera_pos := float3{0, 0, -5}
         camera_forward := float3{0, 0, 1}
         camera_up := float3{0, 1, 0}
-        // camera_yaw := linalg.PI * 0.5
-        // camera_pitch := 0.0
+        camera_yaw := -90.0
+        camera_pitch := 0.0
         speed: f32 = 10.0
+        sensitivity := 0.1
 
         //
         // Main Loop
@@ -372,38 +373,47 @@ main :: proc()
                 }
 
                 // Updating
-                // xpos, ypos: f64
-                // cursor_pos := win32.POINT{}
-                // win32.GetCursorPos(&cursor_pos)
-                // xpos = cast(f64)cursor_pos.x
-                // ypos = cast(f64)cursor_pos.y
+                // Handling mouse input
+                xpos, ypos: f64
+                cursor_pos := win32.POINT{}
+                win32.GetCursorPos(&cursor_pos)
+                xpos = cast(f64)cursor_pos.x
+                ypos = cast(f64)cursor_pos.y
 
-                // window_size := win32.RECT{}
-                // win32.GetWindowRect(window, &window_size)
-                // middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
-                // middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
+                // TODO: remove this once proper window resize management is implemented
+                window_size := win32.RECT{}
+                win32.GetWindowRect(window, &window_size)
+                middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
+                middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
 
-                // dx := xpos - (cast(f64)middle_x / 2)
-                // dy := ypos - (cast(f64)middle_y / 2)
+                dx := xpos - cast(f64)middle_x
+                dy := ypos - cast(f64)middle_y
 
-                // if dx != 0 || dy != 0 {
-                //         win32.SetCursorPos(middle_x, middle_y)
-                // }
+                dx *= sensitivity
+                dy *= sensitivity
 
-                // camera_yaw += dx
-                // camera_pitch += dy
+                if dx != 0 || dy != 0 {
+                        win32.SetCursorPos(middle_x, middle_y)
+                }
 
-                // if camera_pitch > linalg.to_radians(85.0) {
-                //         camera_pitch = linalg.to_radians(85.0)
-                // } else if camera_pitch < -linalg.to_radians(85.0) {
-                //         camera_pitch = -linalg.to_radians(85.0)
-                // }
+                camera_yaw += dx
+                camera_pitch += dy
 
-                // camera_forward.x = cast(f32)(linalg.cos(camera_yaw) * linalg.cos(camera_pitch))
-                // camera_forward.y = cast(f32)(linalg.sin(camera_pitch))
-                // camera_forward.z = cast(f32)(linalg.sin(camera_yaw) * linalg.cos(camera_pitch))
-                // camera_forward = linalg.normalize(camera_forward)
+                if camera_pitch > 89.0 {
+                        camera_pitch = 89.0
+                } else if camera_pitch < -89.0 {
+                        camera_pitch = -89.0
+                }
 
+                yaw_rad := -linalg.to_radians(camera_yaw)
+                pitch_rad := -linalg.to_radians(camera_pitch)
+
+                camera_forward.x = cast(f32)(linalg.cos(yaw_rad) * linalg.cos(pitch_rad))
+                camera_forward.y = cast(f32)(linalg.sin(pitch_rad))
+                camera_forward.z = cast(f32)(linalg.sin(yaw_rad) * linalg.cos(pitch_rad))
+                camera_forward = linalg.normalize(camera_forward)
+
+                // Handling keyboard input
                 add := float3{}
                 if is_down('W') {
                         add += camera_forward
@@ -481,7 +491,7 @@ main_window_proc :: proc "stdcall" (hwnd: win32.HWND, msg: u32, wparam: win32.WP
                 clear_keyboard_state()
                 // wparam == win32.TRUE:  window activated 
                 // wparam == win32.FALSE: window deactivated
-                win32.ShowCursor(cast(win32.BOOL)wparam == win32.FALSE)
+                // win32.ShowCursor(cast(win32.BOOL)wparam == win32.FALSE)
                 return 0
 
         case win32.WM_DESTROY, win32.WM_CLOSE, win32.WM_QUIT:
