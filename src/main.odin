@@ -196,8 +196,8 @@ main :: proc()
 
                 // create a rasterizer state for increased customization options
                 rasterizer_desc := d3d.RASTERIZER_DESC{}
-                rasterizer_desc.FillMode = .SOLID // .WIREFRAME or .SOLID
-                rasterizer_desc.CullMode = .FRONT // .NONE or .FRONT or .BACK
+                rasterizer_desc.FillMode = .WIREFRAME // .WIREFRAME or .SOLID
+                rasterizer_desc.CullMode = .BACK // .NONE or .FRONT or .BACK
                 rasterizer_desc.FrontCounterClockwise = win32.FALSE
                 rasterizer_desc.DepthBias = 0
                 rasterizer_desc.DepthBiasClamp = 0.0
@@ -351,9 +351,9 @@ main :: proc()
         camera_pos := float3{0, 0, -5}
         camera_forward := float3{0, 0, 1}
         camera_up := float3{0, 1, 0}
-        camera_yaw := linalg.PI * 0.5
-        camera_pitch := 0.0
-        // speed: f32 = 10.0
+        // camera_yaw := linalg.PI * 0.5
+        // camera_pitch := 0.0
+        speed: f32 = 10.0
 
         //
         // Main Loop
@@ -372,52 +372,53 @@ main :: proc()
                 }
 
                 // Updating
-                xpos, ypos: f64
-                cursor_pos := win32.POINT{}
-                win32.GetCursorPos(&cursor_pos)
-                xpos = cast(f64)cursor_pos.x
-                ypos = cast(f64)cursor_pos.y
+                // xpos, ypos: f64
+                // cursor_pos := win32.POINT{}
+                // win32.GetCursorPos(&cursor_pos)
+                // xpos = cast(f64)cursor_pos.x
+                // ypos = cast(f64)cursor_pos.y
 
-                window_size := win32.RECT{}
-                win32.GetWindowRect(window, &window_size)
-                middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
-                middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
+                // window_size := win32.RECT{}
+                // win32.GetWindowRect(window, &window_size)
+                // middle_x := window_size.left + ((window_size.right - window_size.left) / 2)
+                // middle_y := window_size.top + ((window_size.bottom - window_size.top) / 2)
 
-                dx := xpos - (cast(f64)middle_x / 2)
-                dy := ypos - (cast(f64)middle_y / 2)
+                // dx := xpos - (cast(f64)middle_x / 2)
+                // dy := ypos - (cast(f64)middle_y / 2)
 
-                if dx != 0 || dy != 0 {
-                        win32.SetCursorPos(middle_x, middle_y)
+                // if dx != 0 || dy != 0 {
+                //         win32.SetCursorPos(middle_x, middle_y)
+                // }
+
+                // camera_yaw += dx
+                // camera_pitch += dy
+
+                // if camera_pitch > linalg.to_radians(85.0) {
+                //         camera_pitch = linalg.to_radians(85.0)
+                // } else if camera_pitch < -linalg.to_radians(85.0) {
+                //         camera_pitch = -linalg.to_radians(85.0)
+                // }
+
+                // camera_forward.x = cast(f32)(linalg.cos(camera_yaw) * linalg.cos(camera_pitch))
+                // camera_forward.y = cast(f32)(linalg.sin(camera_pitch))
+                // camera_forward.z = cast(f32)(linalg.sin(camera_yaw) * linalg.cos(camera_pitch))
+                // camera_forward = linalg.normalize(camera_forward)
+
+                add := float3{}
+                if is_down('W') {
+                        add += camera_forward
                 }
-
-                camera_yaw += dx
-                camera_pitch += dy
-
-                if camera_pitch > linalg.to_radians(85.0) {
-                        camera_pitch = linalg.to_radians(85.0)
-                } else if camera_pitch < -linalg.to_radians(85.0) {
-                        camera_pitch = -linalg.to_radians(85.0)
+                if is_down('S') {
+                        add -= camera_forward
                 }
-
-                camera_forward.x = cast(f32)(linalg.cos(camera_yaw) * linalg.cos(camera_pitch))
-                camera_forward.y = cast(f32)(linalg.sin(camera_pitch))
-                camera_forward.z = cast(f32)(linalg.sin(camera_yaw) * linalg.cos(camera_pitch))
-                camera_forward = linalg.normalize(camera_forward)
-
-                // add := float3{}
-                // if is_down('W') {
-                //         camera_pos += camera_forward
-                // }
-                // if is_down('S') {
-                //         camera_pos -= camera_forward
-                // }
-                // if is_down('A') {
-                //         camera_pos -= linalg.normalize(linalg.cross(camera_forward, camera_up))
-                // }
-                // if is_down('D') {
-                //         camera_pos += linalg.normalize(linalg.cross(camera_forward, camera_up))
-                // }
-                // camera_pos += linalg.normalize(add) * float3{speed, speed, speed} * float3{delta_time, delta_time, delta_time}
+                if is_down('A') {
+                        add += linalg.normalize(linalg.cross(camera_forward, camera_up))
+                }
+                if is_down('D') {
+                        add -= linalg.normalize(linalg.cross(camera_forward, camera_up))
+                }
+                if (add.x != 0 || add.y != 0 || add.z != 0) { add = linalg.normalize(add) }
+                camera_pos += add * {delta_time * speed, delta_time * speed, delta_time * speed}
 
                 update_key_was_down()
 
