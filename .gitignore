@@ -1,3 +1,8 @@
-*.rdbg
+*
 
-bin/
+!bin/*
+!res
+!src
+!*.bat
+!.gitignore
+!README.md
