@@ -24,6 +24,15 @@ scale :: proc(scale: float3) -> float4x4 {
         return linalg.transpose(linalg.matrix4_scale_f32(scale))
 }
 
+float4x4_diag :: proc(diag: float) -> float4x4 {
+        return float4x4{
+                diag, 0, 0, 0,
+                0, diag, 0, 0,
+                0, 0, diag, 0,
+                0, 0, 0, diag,
+        }
+}
+
 look_at :: proc(pos: float3, at: float3, up: float3) -> float4x4
 {
         zaxis := linalg.normalize(at - pos)

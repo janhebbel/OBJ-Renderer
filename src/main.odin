@@ -25,7 +25,9 @@ main :: proc() {
 
         // Load model and store in render group
         render_group: Render_Group
-        render_group, success = make_render_group("..\\res\\f14.obj", &direct_3d)
+        // model := float4x4_diag(1.0)
+        model := scale({0.1, 0.1, 0.1})
+        render_group, success = make_render_group("..\\res\\car.obj", &direct_3d, model)
         if !success {
                 fmt.println("Failed to create a render group.")
                 return
@@ -33,15 +35,7 @@ main :: proc() {
         defer delete_render_group(&render_group)
 
         // Camera
-        camera := Camera{
-                position = {0, 0, -3},
-                direction = {0, 0, 1},
-                up = {0, 1, 0},
-                yaw = -90,
-                pitch = 0,
-                speed = 10,
-                sensitivity = 0.1,
-        }
+        camera := make_camera({0, 0, -3}, {0, 0, 1}, {0, 1, 0}, 0.1, 10, 90)
 
         //
         // Main Loop

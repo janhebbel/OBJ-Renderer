@@ -39,6 +39,8 @@ Render_Group :: struct {
         constant_buffer: ^d3d.IBuffer,
         // sampler_state: ^d3d.ISamplerState,
         // texture_view: ^d3d.IShaderResourceView,
+
+        model: float4x4,
 }
 
 VS_Constant_Buffer :: struct {
@@ -228,7 +230,9 @@ renderer_init :: proc(window: Window) -> (direct_3d: Direct_3D, err: bool) {
         return direct_3d, true
 }
 
-make_render_group :: proc(filename: string, direct_3d: ^Direct_3D) -> (rg: Render_Group, success: bool) {
+make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4x4) -> (rg: Render_Group, success: bool) {
+        rg.model = model
+
         data: []u8
         data, success = os.read_entire_file(filename)
         if !success {
@@ -369,10 +373,10 @@ render :: proc(direct_3d: ^Direct_3D, window: Window, rg: ^Render_Group, camera:
 
         // Supplying the constant buffer with data
         vs_constant_buffer_data := VS_Constant_Buffer{}
-        vs_constant_buffer_data.model = scale({0.1, 0.1, 0.1})
+        vs_constant_buffer_data.model = rg.model
         vs_constant_buffer_data.view = look_at(camera.position, camera.position + camera.direction, camera.up)
+        vs_constant_buffer_data.proj = perspective(camera.fov, width / height, 0.1, 100)
         //vs_constant_buffer_data.proj = orthographic(-8, 8, -4.5, 4.5, 0.1, 100.0)
-        vs_constant_buffer_data.proj = perspective(1.57, width / height, 0.1, 100)
 
         mapped_subresource := d3d.MAPPED_SUBRESOURCE{}
         direct_3d.dcontext.Map(direct_3d.dcontext, rg.constant_buffer, 0, .WRITE_DISCARD, {}, &mapped_subresource)
