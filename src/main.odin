@@ -48,9 +48,6 @@ main :: proc() {
                 
                 process_messages()
 
-                // Updating
-                // Handling mouse input
-
                 update(delta_time, &camera, window)
                 render(&direct_3d, window, &render_group, &camera)
         }
