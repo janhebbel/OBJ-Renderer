@@ -1,5 +1,6 @@
 package flightsim
 
+import "core:os"
 import "core:fmt"
 import "core:strconv"
 
@@ -184,6 +185,17 @@ keywords := [?]string{
 #assert(len(keywords) == cast(int)(Token_Kind.Keywords_End - Token_Kind.Keywords_Begin) - 1, 
         "The keywords slice does not contain all keywords")
 
+Obj_Vertex :: struct {
+        pos: [4]float,
+        uv: [2]float,
+        normal: [3]float,
+}
+
+Obj_Model :: struct {
+        vertex_array: [dynamic]Obj_Vertex,
+        index_array:  [dynamic]u32,
+}
+
 Parser :: struct {
         tokens: []Token,
         tok: Token,
@@ -212,7 +224,7 @@ expect :: proc(p: ^Parser, kind: Token_Kind, min: int, max: int) -> bool {
         return true
 }
 
-get_index :: proc(vertex_array: ^[dynamic]Vertex, vertex: ^Vertex) -> int {
+get_index :: proc(vertex_array: ^[dynamic]Obj_Vertex, vertex: ^Obj_Vertex) -> int {
         for v, i in vertex_array^ {
                 if v == vertex^ {
                         return i
@@ -221,7 +233,7 @@ get_index :: proc(vertex_array: ^[dynamic]Vertex, vertex: ^Vertex) -> int {
         return -1
 }
 
-parse_obj :: proc(data: []u8, vertex_array: ^[dynamic]Vertex, index_array: ^[dynamic]u32) -> (success: bool) {
+parse_obj :: proc(data: []u8, model: ^Obj_Model) -> (success: bool) {
         // 
         // TOKENIZATION
         // 
@@ -304,9 +316,6 @@ parse_obj :: proc(data: []u8, vertex_array: ^[dynamic]Vertex, index_array: ^[dyn
         defer delete(tex_coords)
         defer delete(positions)
         
-        // vertex_array = make([dynamic]Vertex)
-        // index_array = make([dynamic]u32)
-
         for p.tok.kind != .End {
                 if p.tok.kind <= .Keywords_Begin || p.tok.kind >= .Keywords_End {
                         fmt.println("Error while parsing: Expected a keyword.")
@@ -425,13 +434,13 @@ parse_obj :: proc(data: []u8, vertex_array: ^[dynamic]Vertex, index_array: ^[dyn
                                         }
                                 }
 
-                                vertex := Vertex{positions[pidx-1], tex_coords[uvidx-1], normals[nidx-1]}
-                                index := get_index(vertex_array, &vertex)
+                                vertex := Obj_Vertex{positions[pidx-1], tex_coords[uvidx-1], normals[nidx-1]}
+                                index := get_index(&model.vertex_array, &vertex)
                                 if index < 0 {
-                                        append(index_array, cast(u32)len(vertex_array))
-                                        append(vertex_array, vertex)
+                                        append(&model.index_array, cast(u32)len(model.vertex_array))
+                                        append(&model.vertex_array, vertex)
                                 } else {
-                                        append(index_array, cast(u32)index)
+                                        append(&model.index_array, cast(u32)index)
                                 }
                         }
 
@@ -458,4 +467,24 @@ parse_obj :: proc(data: []u8, vertex_array: ^[dynamic]Vertex, index_array: ^[dyn
         }
         
         return true
+}
+
+load_assets :: proc(asset_paths: []string) {
+        for path in asset_paths {
+                data, success := os.read_entire_file(path)
+                if !success {
+                        // TODO: failed to read file {path}
+                        continue
+                }
+                defer delete(data)
+
+                model: Obj_Model
+                success &&= parse_obj(data, &model)
+                if !success {
+                        // TODO: failed to parse obj file {path}
+                        continue
+                }
+
+                
+        }
 }

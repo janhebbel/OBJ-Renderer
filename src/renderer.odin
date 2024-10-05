@@ -28,8 +28,7 @@ Vertex :: struct {
 }
 
 Render_Group :: struct {
-        vertex_array: [dynamic]Vertex,
-        index_array: [dynamic]u32,
+        index_count: u32,
 
         input_layout: ^d3d.IInputLayout,
         vertex_shader: ^d3d.IVertexShader,
@@ -241,13 +240,16 @@ make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4
         }
         defer delete(data)
 
-        success = parse_obj(data, &rg.vertex_array, &rg.index_array)
+        model: Obj_Model
+        success = parse_obj(data, &model)
         if !success {
                 fmt.println("Failed to parse obj file.")
                 return rg, false
         }
-        defer delete(rg.vertex_array)
-        defer delete(rg.index_array)
+        defer delete(model.vertex_array)
+        defer delete(model.index_array)
+
+        rg.index_count = cast(u32)len(model.index_array)
 
         device := direct_3d.device
 
@@ -291,14 +293,14 @@ make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4
         // Create vertex buffer
         vertex_buffer_desc := d3d.BUFFER_DESC{
                 Usage = .DEFAULT,
-                ByteWidth = cast(u32)len(rg.vertex_array) * size_of(Vertex),
+                ByteWidth = cast(u32)len(model.vertex_array) * size_of(Vertex),
                 BindFlags = {.VERTEX_BUFFER},
                 CPUAccessFlags = {},
                 MiscFlags = {},
         }
 
         vertex_data := d3d.SUBRESOURCE_DATA{
-                pSysMem = raw_data(rg.vertex_array),
+                pSysMem = raw_data(model.vertex_array),
                 SysMemPitch = 0,
                 SysMemSlicePitch = 0,
         }
@@ -311,14 +313,14 @@ make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4
         // Create index buffer
         index_buffer_desc := d3d.BUFFER_DESC{
                 Usage = .DEFAULT,
-                ByteWidth = cast(u32)len(rg.index_array) * size_of(u32),
+                ByteWidth = cast(u32)len(model.index_array) * size_of(u32),
                 BindFlags = {.INDEX_BUFFER},
                 CPUAccessFlags = {},
                 MiscFlags = {},
         }
 
         index_data := d3d.SUBRESOURCE_DATA{
-                pSysMem = &rg.index_array[0],
+                pSysMem = &model.index_array[0],
                 SysMemPitch = 0,
                 SysMemSlicePitch = 0,
         }
@@ -391,7 +393,7 @@ render :: proc(direct_3d: ^Direct_3D, window: Window, rg: ^Render_Group, camera:
         direct_3d.dcontext.ClearRenderTargetView(direct_3d.dcontext, direct_3d.render_target_view, &clear_color)
         direct_3d.dcontext.ClearDepthStencilView(direct_3d.dcontext, direct_3d.depth_stencil_view, {.DEPTH, .STENCIL}, 1.0, 0)
 
-        direct_3d.dcontext.DrawIndexed(direct_3d.dcontext, cast(u32)len(rg.index_array), 0, 0)
+        direct_3d.dcontext.DrawIndexed(direct_3d.dcontext, rg.index_count, 0, 0)
 
         hr: d3d.HRESULT = direct_3d.swapchain.Present(direct_3d.swapchain, 0, present_flags) // 0 & .ALLOW_TEARING = no vsync
         assert(hr == 0)
