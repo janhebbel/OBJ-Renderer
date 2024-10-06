@@ -469,6 +469,11 @@ parse :: proc(data: []u8, model: ^Model) -> (success: bool) {
         return true
 }
 
+release :: proc(model: Model) {
+        delete(model.vertex_array)
+        delete(model.index_array)
+}
+
 load_assets :: proc(asset_paths: []string) {
         for path in asset_paths {
                 data, success := os.read_entire_file(path)

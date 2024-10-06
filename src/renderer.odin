@@ -248,8 +248,7 @@ make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4
                 fmt.println("Failed to parse obj file.")
                 return rg, false
         }
-        defer delete(model.vertex_array)
-        defer delete(model.index_array)
+        defer obj.release(model)
 
         rg.index_count = cast(u32)len(model.index_array)
 
