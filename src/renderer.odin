@@ -6,6 +6,8 @@ import "core:fmt"
 import "core:os"
 import "base:runtime"
 
+import "pkg:obj"
+
 // enable max frame rate
 when ODIN_DEBUG {
         present_flags :: dxgi.PRESENT{.ALLOW_TEARING}
@@ -240,8 +242,8 @@ make_render_group :: proc(filename: string, direct_3d: ^Direct_3D, model: float4
         }
         defer delete(data)
 
-        model: Obj_Model
-        success = parse_obj(data, &model)
+        model: obj.Model
+        success = obj.parse(data, &model)
         if !success {
                 fmt.println("Failed to parse obj file.")
                 return rg, false
