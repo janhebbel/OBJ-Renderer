@@ -27,12 +27,11 @@ make_camera :: proc(pos: float3, dir: float3, up: float3, sensitivity: f32, spee
         }
 }
 
-update :: proc(delta_time: f32, camera: ^Camera, window: Window) {
+update :: proc(delta_time: f64, camera: ^Camera, window: Window) {
         if window_has_focus() {
-                xpos, ypos: f32
                 cursor_pos := get_cursor_pos()
-                xpos = cast(f32)cursor_pos.x
-                ypos = cast(f32)cursor_pos.y
+                xpos := cast(f32)cursor_pos.x
+                ypos := cast(f32)cursor_pos.y
 
                 // TODO: remove this once proper window resize management is implemented
                 window_rect := get_window_rect(window)
@@ -68,7 +67,7 @@ update :: proc(delta_time: f32, camera: ^Camera, window: Window) {
                 camera.direction = linalg.normalize(camera.direction)
 
                 // Handling keyboard input
-                add := float3{}
+                add := [3]f32{}
                 if is_down('W') {
                         add += camera.direction
                 }
@@ -81,8 +80,10 @@ update :: proc(delta_time: f32, camera: ^Camera, window: Window) {
                 if is_down('D') {
                         add -= linalg.normalize(linalg.cross(camera.direction, camera.up))
                 }
+                f32_delta_time := cast(f32)delta_time
                 if (add.x != 0 || add.y != 0 || add.z != 0) { add = linalg.normalize(add) }
-                camera.position += add * {delta_time * camera.speed, delta_time * camera.speed, delta_time * camera.speed}
+                add *= {f32_delta_time * camera.speed, f32_delta_time * camera.speed, f32_delta_time * camera.speed}
+                camera.position += add
 
                 update_key_was_down()
         }

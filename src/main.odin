@@ -19,7 +19,7 @@ main :: proc() {
         //
         // Main loop set up
         //
-        delta_time, time_last, time_now: f32 = 0.0, 0.0, 0.0
+        delta_time, time_last, time_now: f64 = 0.0, 0.0, 0.0
 
         show_window(window)
 
@@ -43,7 +43,7 @@ main :: proc() {
         for is_running() {
                 // Calculate delta time
                 time_last = time_now
-                time_now = cast(f32)get_time()
+                time_now = get_time()
                 delta_time = time_now - time_last
                 
                 process_messages()
