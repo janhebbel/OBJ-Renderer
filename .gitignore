@@ -1,3 +1,4 @@
 *.rdbg
 
 bin/
+res/asset_preprocessor/bin
