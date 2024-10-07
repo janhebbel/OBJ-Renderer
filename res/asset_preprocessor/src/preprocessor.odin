@@ -82,6 +82,7 @@ main :: proc() {
         }
         defer os.close(fh)
 
+        // TODO: this assumes the file is a directory, FIX this
         file_infos, err2 := os.read_dir(fh, 0)
         if err2 != nil {
                 fmt.println("Failed to read directory %s!", file)
@@ -92,7 +93,15 @@ main :: proc() {
                 ext := strings.split(file_info.name, ".")
                 assert(len(ext) == 1 || len(ext) == 2)
                 if len(ext) >= 2 && ext[1] == "obj" {
-                        // check if equivalent processed file exists already and skip, unless reprocess is specified
+                        path := strings.split(file_info.fullpath, ".")
+                        assert(len(path) == 1 || len(path) == 2)
+                        output_path := strings.concatenate({path[0], output_file_extension})
+
+                        if !reprocess && os.exists(output_path) {
+                                continue
+                        }
+
+                        process_asset(file_info.fullpath)
                 }
         }
 }
