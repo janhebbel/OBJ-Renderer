@@ -1,2 +1,2 @@
-# Flight-Sim
-A small little flight sim game that features just some basic movement, one jet, but a few cool computer graphics techniques.
+# OBJ-Renderer
+A rudimentary OBJ file parser that transforms vertex data into a custom scene data structure and renders it using the Direct3D 11 API.
